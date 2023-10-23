@@ -5,7 +5,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 
 	// this has to be the same as the go.mod module,
 	// followed by the path to the folder the proto file is in.
+
 	gRPC "github.com/JonasSkjodt/chitty-chat/proto"
 
 	"google.golang.org/grpc"
@@ -166,7 +166,7 @@ func setLog() *os.File {
 }
 
 // testing messaging system start
-func sendMessage(text string) {
+/*func sendMessage(text string) {
 	msg := &proto.ChatMessage{
 		ClientName: *clientsName,
 		Content:    text,
@@ -182,7 +182,7 @@ func receiveMessage() {
 	details := &proto.ClientName{
 		ClientName: *clientsName,
 	}
-	stream, err := server.ReceiveMessage(context.Background(), details)
+	stream, err := server.ReceiveMessageStream(context.Background(), details)
 	if err != nil {
 		log.Fatalf("Error on receive: %v", err)
 	}
@@ -196,6 +196,6 @@ func receiveMessage() {
 		}
 		log.Printf("Received message %s from %s", msg.Content, msg.ClientName)
 	}
-}
+}*/
 
 //testing messaging system end
