@@ -12,7 +12,7 @@ import (
 
 	// this has to be the same as the go.mod module,
 	// followed by the path to the folder the proto file is in.
-	gRPC "github.com/PatrickMatthiesen/DSYS-gRPC-template/proto"
+	gRPC "github.com/JonasSkjodt/chitty-chat/proto"
 
 	"google.golang.org/grpc"
 )
@@ -144,3 +144,21 @@ func setLog() *os.File {
 	log.SetOutput(f)
 	return f
 }
+
+// testing messaging system start
+func (s *Server) SendMessage(ctx context.Context, msg *template.ChatMessage) (*template.Ack, error) {
+	// Add your code to store the msg in your chat history
+	return &template.Ack{Status: "Message Received"}, nil
+}
+
+func (s *Server) ReceiveMessage(details *template.ClientDetails, stream template.Chat_ReceiveMessageServer) error {
+	// Add chat history for this client and send it back
+	for _, msg := range chatHistory {
+		if err := stream.Send(msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+//testing messaging system end

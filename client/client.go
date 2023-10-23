@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -12,7 +13,7 @@ import (
 
 	// this has to be the same as the go.mod module,
 	// followed by the path to the folder the proto file is in.
-	gRPC "github.com/PatrickMatthiesen/DSYS-gRPC-template/proto"
+	gRPC "github.com/JonasSkjodt/chitty-chat/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -50,8 +51,8 @@ func ConnectToServer() {
 	//dial options
 	//the server is not using TLS, so we use insecure credentials
 	//(should be fine for local testing but not in the real world)
-	opts := []grpc.DialOption {
-		grpc.WithBlock(), 
+	opts := []grpc.DialOption{
+		grpc.WithBlock(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
@@ -163,3 +164,38 @@ func setLog() *os.File {
 	log.SetOutput(f)
 	return f
 }
+
+// testing messaging system start
+func sendMessage(text string) {
+	msg := &template.ChatMessage{
+		ClientName: *clientsName,
+		Content:    text,
+	}
+	ack, err := server.SendMessage(context.Background(), msg)
+	if err != nil {
+		log.Fatalf("Failed to send message: %v", err)
+	}
+	log.Printf("Server acknowledged with: %s", ack.Status)
+}
+
+func receiveMessage() {
+	details := &template.ClientDetails{
+		ClientName: *clientsName,
+	}
+	stream, err := server.ReceiveMessage(context.Background(), details)
+	if err != nil {
+		log.Fatalf("Error on receive: %v", err)
+	}
+	for {
+		msg, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
+		log.Printf("Received message %s from %s", msg.Content, msg.ClientName)
+	}
+}
+
+//testing messaging system end

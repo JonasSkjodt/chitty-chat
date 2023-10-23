@@ -1,11 +1,11 @@
 syntax = "proto3";
 
-option go_package = "github.com/PatrickMatthiesen/DSYS-gRPC-template/proto";
+option go_package = "github.com/JonasSkjodt/chitty-chat/proto";
 
 package proto;
 
-// compile command:
-// protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative [path to file, ex. proto/template.proto]
+// compile command: (run from /chitty-chat/)
+// protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/template.proto
 /*
 The Client: go run .\client\client.go
 The Server: go run .\server\server.go
@@ -20,6 +20,11 @@ service Template
 
     // many messages are sent and one is recieved
     rpc SayHi (stream Greeding) returns (Farewell);
+
+    //testing messaging system start
+    rpc SendMessage(Message) returns (Ack);
+    rpc ReceiveMessageStream(ClientName) returns (stream Message);
+    //testing messaging system end
 }
 
 // Amount is a type containing a string and int. They are intialized as the first and second parameter value.
@@ -40,3 +45,14 @@ message Greeding {
 message Farewell {
     string message = 1;
 }
+
+//testing messaging system start
+message Message {
+    string clientName = 1;
+    string content = 2;
+}
+
+message ClientName {
+    string clientName = 1;
+}
+//testing messaging system end

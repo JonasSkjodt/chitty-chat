@@ -1,6 +1,6 @@
-module github.com/PatrickMatthiesen/DSYS-gRPC-template
+module github.com/JonasSkjodt/chitty-chat
 
-go 1.19
+go 1.21.0
 
 require (
 	google.golang.org/grpc v1.49.0
