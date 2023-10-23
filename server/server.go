@@ -146,12 +146,12 @@ func setLog() *os.File {
 }
 
 // testing messaging system start
-func (s *Server) SendMessage(ctx context.Context, msg *template.ChatMessage) (*template.Ack, error) {
+func (s *Server) SendMessage(ctx context.Context, msg *proto.ChatMessage) (*proto.Ack, error) {
 	// Add your code to store the msg in your chat history
-	return &template.Ack{Status: "Message Received"}, nil
+	return &proto.Ack{Status: "Message Received"}, nil
 }
 
-func (s *Server) ReceiveMessage(details *template.ClientDetails, stream template.Chat_ReceiveMessageServer) error {
+func (s *Server) ReceiveMessage(details *proto.ClientDetails, stream proto.Chat_ReceiveMessageServer) error {
 	// Add chat history for this client and send it back
 	for _, msg := range chatHistory {
 		if err := stream.Send(msg); err != nil {

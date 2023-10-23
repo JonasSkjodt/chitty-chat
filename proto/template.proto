@@ -20,10 +20,12 @@ service Template
 
     // many messages are sent and one is recieved
     rpc SayHi (stream Greeding) returns (Farewell);
+}
 
+service Chat {
     //testing messaging system start
-    rpc SendMessage(Message) returns (Ack);
-    rpc ReceiveMessageStream(ClientName) returns (stream Message);
+    rpc SendMessage(ChatMessage) returns (Ack);
+    rpc ReceiveMessageStream(ClientName) returns (stream ChatMessage);
     //testing messaging system end
 }
 
@@ -47,7 +49,7 @@ message Farewell {
 }
 
 //testing messaging system start
-message Message {
+message ChatMessage {
     string clientName = 1;
     string content = 2;
 }

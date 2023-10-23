@@ -19,10 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Template_Increment_FullMethodName            = "/proto.Template/Increment"
-	Template_SayHi_FullMethodName                = "/proto.Template/SayHi"
-	Template_SendMessage_FullMethodName          = "/proto.Template/SendMessage"
-	Template_ReceiveMessageStream_FullMethodName = "/proto.Template/ReceiveMessageStream"
+	Template_Increment_FullMethodName = "/proto.Template/Increment"
+	Template_SayHi_FullMethodName     = "/proto.Template/SayHi"
 )
 
 // TemplateClient is the client API for Template service.
@@ -33,9 +31,6 @@ type TemplateClient interface {
 	Increment(ctx context.Context, in *Amount, opts ...grpc.CallOption) (*Ack, error)
 	// many messages are sent and one is recieved
 	SayHi(ctx context.Context, opts ...grpc.CallOption) (Template_SayHiClient, error)
-	// testing messaging system start
-	SendMessage(ctx context.Context, in *Message, opts ...grpc.CallOption) (*Ack, error)
-	ReceiveMessageStream(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (Template_ReceiveMessageStreamClient, error)
 }
 
 type templateClient struct {
@@ -89,47 +84,6 @@ func (x *templateSayHiClient) CloseAndRecv() (*Farewell, error) {
 	return m, nil
 }
 
-func (c *templateClient) SendMessage(ctx context.Context, in *Message, opts ...grpc.CallOption) (*Ack, error) {
-	out := new(Ack)
-	err := c.cc.Invoke(ctx, Template_SendMessage_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *templateClient) ReceiveMessageStream(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (Template_ReceiveMessageStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Template_ServiceDesc.Streams[1], Template_ReceiveMessageStream_FullMethodName, opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &templateReceiveMessageStreamClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Template_ReceiveMessageStreamClient interface {
-	Recv() (*Message, error)
-	grpc.ClientStream
-}
-
-type templateReceiveMessageStreamClient struct {
-	grpc.ClientStream
-}
-
-func (x *templateReceiveMessageStreamClient) Recv() (*Message, error) {
-	m := new(Message)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 // TemplateServer is the server API for Template service.
 // All implementations must embed UnimplementedTemplateServer
 // for forward compatibility
@@ -138,9 +92,6 @@ type TemplateServer interface {
 	Increment(context.Context, *Amount) (*Ack, error)
 	// many messages are sent and one is recieved
 	SayHi(Template_SayHiServer) error
-	// testing messaging system start
-	SendMessage(context.Context, *Message) (*Ack, error)
-	ReceiveMessageStream(*ClientName, Template_ReceiveMessageStreamServer) error
 	mustEmbedUnimplementedTemplateServer()
 }
 
@@ -153,12 +104,6 @@ func (UnimplementedTemplateServer) Increment(context.Context, *Amount) (*Ack, er
 }
 func (UnimplementedTemplateServer) SayHi(Template_SayHiServer) error {
 	return status.Errorf(codes.Unimplemented, "method SayHi not implemented")
-}
-func (UnimplementedTemplateServer) SendMessage(context.Context, *Message) (*Ack, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendMessage not implemented")
-}
-func (UnimplementedTemplateServer) ReceiveMessageStream(*ClientName, Template_ReceiveMessageStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method ReceiveMessageStream not implemented")
 }
 func (UnimplementedTemplateServer) mustEmbedUnimplementedTemplateServer() {}
 
@@ -217,45 +162,6 @@ func (x *templateSayHiServer) Recv() (*Greeding, error) {
 	return m, nil
 }
 
-func _Template_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Message)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TemplateServer).SendMessage(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Template_SendMessage_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TemplateServer).SendMessage(ctx, req.(*Message))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Template_ReceiveMessageStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ClientName)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(TemplateServer).ReceiveMessageStream(m, &templateReceiveMessageStreamServer{stream})
-}
-
-type Template_ReceiveMessageStreamServer interface {
-	Send(*Message) error
-	grpc.ServerStream
-}
-
-type templateReceiveMessageStreamServer struct {
-	grpc.ServerStream
-}
-
-func (x *templateReceiveMessageStreamServer) Send(m *Message) error {
-	return x.ServerStream.SendMsg(m)
-}
-
 // Template_ServiceDesc is the grpc.ServiceDesc for Template service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -267,10 +173,6 @@ var Template_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Increment",
 			Handler:    _Template_Increment_Handler,
 		},
-		{
-			MethodName: "SendMessage",
-			Handler:    _Template_SendMessage_Handler,
-		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -278,9 +180,161 @@ var Template_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _Template_SayHi_Handler,
 			ClientStreams: true,
 		},
+	},
+	Metadata: "proto/template.proto",
+}
+
+const (
+	Chat_SendMessage_FullMethodName          = "/proto.Chat/SendMessage"
+	Chat_ReceiveMessageStream_FullMethodName = "/proto.Chat/ReceiveMessageStream"
+)
+
+// ChatClient is the client API for Chat service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ChatClient interface {
+	// testing messaging system start
+	SendMessage(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*Ack, error)
+	ReceiveMessageStream(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (Chat_ReceiveMessageStreamClient, error)
+}
+
+type chatClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewChatClient(cc grpc.ClientConnInterface) ChatClient {
+	return &chatClient{cc}
+}
+
+func (c *chatClient) SendMessage(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*Ack, error) {
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, Chat_SendMessage_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chatClient) ReceiveMessageStream(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (Chat_ReceiveMessageStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Chat_ServiceDesc.Streams[0], Chat_ReceiveMessageStream_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &chatReceiveMessageStreamClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Chat_ReceiveMessageStreamClient interface {
+	Recv() (*ChatMessage, error)
+	grpc.ClientStream
+}
+
+type chatReceiveMessageStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *chatReceiveMessageStreamClient) Recv() (*ChatMessage, error) {
+	m := new(ChatMessage)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// ChatServer is the server API for Chat service.
+// All implementations must embed UnimplementedChatServer
+// for forward compatibility
+type ChatServer interface {
+	// testing messaging system start
+	SendMessage(context.Context, *ChatMessage) (*Ack, error)
+	ReceiveMessageStream(*ClientName, Chat_ReceiveMessageStreamServer) error
+	mustEmbedUnimplementedChatServer()
+}
+
+// UnimplementedChatServer must be embedded to have forward compatible implementations.
+type UnimplementedChatServer struct {
+}
+
+func (UnimplementedChatServer) SendMessage(context.Context, *ChatMessage) (*Ack, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendMessage not implemented")
+}
+func (UnimplementedChatServer) ReceiveMessageStream(*ClientName, Chat_ReceiveMessageStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method ReceiveMessageStream not implemented")
+}
+func (UnimplementedChatServer) mustEmbedUnimplementedChatServer() {}
+
+// UnsafeChatServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ChatServer will
+// result in compilation errors.
+type UnsafeChatServer interface {
+	mustEmbedUnimplementedChatServer()
+}
+
+func RegisterChatServer(s grpc.ServiceRegistrar, srv ChatServer) {
+	s.RegisterService(&Chat_ServiceDesc, srv)
+}
+
+func _Chat_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChatMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChatServer).SendMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Chat_SendMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChatServer).SendMessage(ctx, req.(*ChatMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Chat_ReceiveMessageStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ClientName)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ChatServer).ReceiveMessageStream(m, &chatReceiveMessageStreamServer{stream})
+}
+
+type Chat_ReceiveMessageStreamServer interface {
+	Send(*ChatMessage) error
+	grpc.ServerStream
+}
+
+type chatReceiveMessageStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *chatReceiveMessageStreamServer) Send(m *ChatMessage) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+// Chat_ServiceDesc is the grpc.ServiceDesc for Chat service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Chat_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "proto.Chat",
+	HandlerType: (*ChatServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SendMessage",
+			Handler:    _Chat_SendMessage_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "ReceiveMessageStream",
-			Handler:       _Template_ReceiveMessageStream_Handler,
+			Handler:       _Chat_ReceiveMessageStream_Handler,
 			ServerStreams: true,
 		},
 	},

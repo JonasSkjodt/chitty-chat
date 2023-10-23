@@ -167,7 +167,7 @@ func setLog() *os.File {
 
 // testing messaging system start
 func sendMessage(text string) {
-	msg := &template.ChatMessage{
+	msg := &proto.ChatMessage{
 		ClientName: *clientsName,
 		Content:    text,
 	}
@@ -179,7 +179,7 @@ func sendMessage(text string) {
 }
 
 func receiveMessage() {
-	details := &template.ClientDetails{
+	details := &proto.ClientName{
 		ClientName: *clientsName,
 	}
 	stream, err := server.ReceiveMessage(context.Background(), details)
