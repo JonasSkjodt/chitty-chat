@@ -5,7 +5,9 @@ option go_package = "github.com/JonasSkjodt/chitty-chat/proto";
 package proto;
 
 // compile command: (run from /chitty-chat/)
+// USE THIS AFTER YOU ALTER AND SAVE THE PROTO FILE
 // protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/template.proto
+
 /*
 The Client: go run .\client\client.go
 The Server: go run .\server\server.go
@@ -37,6 +39,8 @@ message Amount {
 
 message Ack {
     int64 newValue = 1;
+    //gave it a status for the chat system
+    string status = 2;
 }
 
 message Greeding {

@@ -1,3 +1,4 @@
+// server.go
 package main
 
 import (
@@ -14,9 +15,6 @@ import (
 	// followed by the path to the folder the proto file is in.
 	gRPC "github.com/JonasSkjodt/chitty-chat/proto"
 	"google.golang.org/grpc"
-
-	//still figuring out why it needs to be like this.
-	"github.com/JonasSkjodt/chitty-chat/proto"
 )
 
 type Server struct {
@@ -148,18 +146,18 @@ func setLog() *os.File {
 }
 
 // testing messaging system start
-var chatHistory []*proto.ChatMessage
+var chatHistory []*gRPC.ChatMessage
 
-func (s *Server) SendMessage(ctx context.Context, msg *proto.ChatMessage) (*proto.Ack, error) {
+func (s *Server) SendMessage(ctx context.Context, msg *gRPC.ChatMessage) (*gRPC.Ack, error) {
 	//add the message to the chat history
 	chatHistory = append(chatHistory, msg)
 
 	// make a status field for the Ack message??
-	return &proto.Ack{ /*Status: "Message Received"*/ }, nil
+	return &gRPC.Ack{ /*Status: "Message Received"*/ }, nil
 }
 
 // remember to look in the proto file for the actual names..............
-func (s *Server) ReceiveMessageStream(details *proto.ClientName, stream proto.Chat_ReceiveMessageStreamServer) error {
+func (s *Server) ReceiveMessageStream(details *gRPC.ClientName, stream gRPC.Chat_ReceiveMessageStreamServer) error {
 	// Add chat history for this client and send it back.
 	for _, msg := range chatHistory {
 		if err := stream.Send(msg); err != nil {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -25,6 +26,7 @@ var serverPort = flag.String("server", "5400", "Tcp server")
 
 var server gRPC.TemplateClient  //the server
 var ServerConn *grpc.ClientConn //the server connection
+var chatServer gRPC.ChatClient  // new chat server client
 
 func main() {
 	//parse flag/arguments
@@ -64,6 +66,8 @@ func ConnectToServer() {
 		return
 	}
 
+	//for the chat implementation
+	chatServer = gRPC.NewChatClient(ServerConn)
 	// makes a client from the server connection and saves the connection
 	// and prints rather or not the connection was is READY
 	server = gRPC.NewTemplateClient(conn)
@@ -166,12 +170,12 @@ func setLog() *os.File {
 }
 
 // testing messaging system start
-/*func sendMessage(text string) {
-	msg := &proto.ChatMessage{
+func sendMessage(text string) {
+	msg := &gRPC.ChatMessage{
 		ClientName: *clientsName,
 		Content:    text,
 	}
-	ack, err := server.SendMessage(context.Background(), msg)
+	ack, err := chatServer.SendMessage(context.Background(), msg)
 	if err != nil {
 		log.Fatalf("Failed to send message: %v", err)
 	}
@@ -179,10 +183,10 @@ func setLog() *os.File {
 }
 
 func receiveMessage() {
-	details := &proto.ClientName{
+	details := &gRPC.ClientName{
 		ClientName: *clientsName,
 	}
-	stream, err := server.ReceiveMessageStream(context.Background(), details)
+	stream, err := chatServer.ReceiveMessageStream(context.Background(), details)
 	if err != nil {
 		log.Fatalf("Error on receive: %v", err)
 	}
@@ -196,6 +200,6 @@ func receiveMessage() {
 		}
 		log.Printf("Received message %s from %s", msg.Content, msg.ClientName)
 	}
-}*/
+}
 
 //testing messaging system end
