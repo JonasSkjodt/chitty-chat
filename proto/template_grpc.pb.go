@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Chat_MessageStream_FullMethodName   = "/proto.Chat/MessageStream"
-	Chat_ConnectToServer_FullMethodName = "/proto.Chat/ConnectToServer"
+	Chat_MessageStream_FullMethodName        = "/proto.Chat/MessageStream"
+	Chat_ConnectToServer_FullMethodName      = "/proto.Chat/ConnectToServer"
+	Chat_DisconnectFromServer_FullMethodName = "/proto.Chat/DisconnectFromServer"
 )
 
 // ChatClient is the client API for Chat service.
@@ -29,6 +30,7 @@ const (
 type ChatClient interface {
 	MessageStream(ctx context.Context, opts ...grpc.CallOption) (Chat_MessageStreamClient, error)
 	ConnectToServer(ctx context.Context, opts ...grpc.CallOption) (Chat_ConnectToServerClient, error)
+	DisconnectFromServer(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*Ack, error)
 }
 
 type chatClient struct {
@@ -80,7 +82,7 @@ func (c *chatClient) ConnectToServer(ctx context.Context, opts ...grpc.CallOptio
 }
 
 type Chat_ConnectToServerClient interface {
-	Send(*ClientName) error
+	Send(*ChatMessage) error
 	CloseAndRecv() (*Ack, error)
 	grpc.ClientStream
 }
@@ -89,7 +91,7 @@ type chatConnectToServerClient struct {
 	grpc.ClientStream
 }
 
-func (x *chatConnectToServerClient) Send(m *ClientName) error {
+func (x *chatConnectToServerClient) Send(m *ChatMessage) error {
 	return x.ClientStream.SendMsg(m)
 }
 
@@ -104,12 +106,22 @@ func (x *chatConnectToServerClient) CloseAndRecv() (*Ack, error) {
 	return m, nil
 }
 
+func (c *chatClient) DisconnectFromServer(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*Ack, error) {
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, Chat_DisconnectFromServer_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ChatServer is the server API for Chat service.
 // All implementations must embed UnimplementedChatServer
 // for forward compatibility
 type ChatServer interface {
 	MessageStream(Chat_MessageStreamServer) error
 	ConnectToServer(Chat_ConnectToServerServer) error
+	DisconnectFromServer(context.Context, *ClientName) (*Ack, error)
 	mustEmbedUnimplementedChatServer()
 }
 
@@ -122,6 +134,9 @@ func (UnimplementedChatServer) MessageStream(Chat_MessageStreamServer) error {
 }
 func (UnimplementedChatServer) ConnectToServer(Chat_ConnectToServerServer) error {
 	return status.Errorf(codes.Unimplemented, "method ConnectToServer not implemented")
+}
+func (UnimplementedChatServer) DisconnectFromServer(context.Context, *ClientName) (*Ack, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DisconnectFromServer not implemented")
 }
 func (UnimplementedChatServer) mustEmbedUnimplementedChatServer() {}
 
@@ -168,7 +183,7 @@ func _Chat_ConnectToServer_Handler(srv interface{}, stream grpc.ServerStream) er
 
 type Chat_ConnectToServerServer interface {
 	SendAndClose(*Ack) error
-	Recv() (*ClientName, error)
+	Recv() (*ChatMessage, error)
 	grpc.ServerStream
 }
 
@@ -180,12 +195,30 @@ func (x *chatConnectToServerServer) SendAndClose(m *Ack) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *chatConnectToServerServer) Recv() (*ClientName, error) {
-	m := new(ClientName)
+func (x *chatConnectToServerServer) Recv() (*ChatMessage, error) {
+	m := new(ChatMessage)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+func _Chat_DisconnectFromServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClientName)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChatServer).DisconnectFromServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Chat_DisconnectFromServer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChatServer).DisconnectFromServer(ctx, req.(*ClientName))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 // Chat_ServiceDesc is the grpc.ServiceDesc for Chat service.
@@ -194,7 +227,12 @@ func (x *chatConnectToServerServer) Recv() (*ClientName, error) {
 var Chat_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "proto.Chat",
 	HandlerType: (*ChatServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "DisconnectFromServer",
+			Handler:    _Chat_DisconnectFromServer_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "MessageStream",

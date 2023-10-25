@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"log"
 	"os"
@@ -46,10 +47,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error on receive: %v", err)
 	}
+	hasher := fnv.New32()
+	hasher.Write([]byte(*clientsName))
 
-	SendMessage(*clientsName+" has connected", ChatStream)
+	SendMessage(fmt.Sprint(hasher.Sum32()), ChatStream)
 
 	//start the biding
+
 	go listenForMessages(ChatStream)
 	parseInput(ChatStream)
 }
@@ -109,7 +113,14 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 		// 	}
 		// 	continue
 		// }
-		SendMessage(input, stream)
+
+		if input == "exit" {
+			chatServer.DisconnectFromServer(stream.Context(), &gRPC.ClientName{ClientName: *clientsName})
+			os.Exit(0)
+		} else {
+			SendMessage(input, stream)
+		}
+
 	}
 }
 
@@ -135,8 +146,15 @@ func SendMessage(content string, stream gRPC.Chat_MessageStreamClient) {
 		ClientName: *clientsName,
 	}
 
-	stream.Send(message)
-	stream.Send(message) // Server for some reason only reads every second message sent so this is just to clear the "buffer"
+	i := 0
+
+	if i == 0 {
+		i++
+		stream.Send(message)
+	} else {
+		stream.Send(message)
+		stream.Send(message) // Server for some reason only reads every second message sent so this is just to clear the "buffer"
+	}
 }
 
 // watch the god

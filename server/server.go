@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"log"
 	"net"
@@ -93,45 +95,67 @@ func launchServer() {
 //	}
 var clientNames = make(map[string]gRPC.Chat_MessageStreamServer)
 
+func DeleteUser(clientName string) {
+	if clientName != "" {
+		delete(clientNames, clientName)
+		log.Printf("%s has diconnected\n", clientName)
+	}
+}
+
 func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) error {
 	for {
 		// get the next message from the stream
 		msg, err := msgStream.Recv()
+		hasher := fnv.New32()
+		hasher.Write([]byte(msg.ClientName))
+		if msg.Content == fmt.Sprint(hasher.Sum32()) {
+			clientNames[msg.ClientName] = msgStream
+			hasher = nil
 
-		// the stream is closed so we can exit the loop
-		if err == io.EOF {
-			break
-		}
-		// some other error
-		if err != nil {
-			return err
-		}
-		// log the message
-		log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
+		} else {
 
-		ConnectToServer(msgStream)
+			// if msg.Content == "exit" {
+			// 	DeleteUser(msg.ClientName)
+			// }
 
-		go func() {
-			for name := range clientNames {
-				clientNames[name].Send(msg)
+			// the stream is closed so we can exit the loop
+			if err == io.EOF {
+				break
 			}
-		}()
+			// some other error
+			if err != nil {
+				return err
+			}
+			// log the message
+			log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
 
+			go func() {
+				for name := range clientNames {
+					clientNames[name].Send(msg)
+				}
+			}()
+		}
 	}
 
 	return nil
 }
 
-func ConnectToServer(msgStream gRPC.Chat_MessageStreamServer) error {
-	msg, err := msgStream.Recv()
+// func (s *chatServer) ConnectToServer(msgStream gRPC.Chat_ConnectToServerServer) error {
+// 	msg, err := msgStream.Recv()
 
-	// some other error
-	if err != nil {
-		log.Fatal("Failed in connecting to the server, with error:  %s", err)
-		return err
-	}
-	clientNames[msg.ClientName] = msgStream
-	return nil
+// 	// some other error
+// 	if err != nil {
+// 		log.Fatal("Failed in connecting to the server, with error:  %s", err)
+// 	}
+// 	clientNames[msg.ClientName] = msgStream
+// 	return nil
+// }
+
+// Method that disconnects a client from the server
+func (s *chatServer) DisconnectFromServer(ctx context.Context, name *gRPC.ClientName) (*gRPC.Ack, error) {
+	log.Printf("Client %s: Disconnected from the server", name)
+	DeleteUser(name.ClientName)
+	return &gRPC.Ack{Message: "success"}, nil
 }
 
 // Get preferred outbound ip of this machine
