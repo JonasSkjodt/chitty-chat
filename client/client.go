@@ -171,10 +171,17 @@ func setLog() *os.File {
 
 // testing messaging system start
 func sendMessage(text string) {
+	// Check if the message length exceeds 128 characters
+	/*if len(text) > 128 {
+		log.Fatalf("Failed to send message: message length exceeds 128 characters.")
+		return
+	}*/
+
 	msg := &gRPC.ChatMessage{
 		ClientName: *clientsName,
 		Content:    text,
 	}
+
 	ack, err := chatServer.SendMessage(context.Background(), msg)
 	if err != nil {
 		log.Fatalf("Failed to send message: %v", err)

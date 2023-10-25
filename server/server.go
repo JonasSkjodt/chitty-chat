@@ -1,4 +1,3 @@
-// server.go
 package main
 
 import (
@@ -147,24 +146,50 @@ func setLog() *os.File {
 
 // testing messaging system start
 var chatHistory []*gRPC.ChatMessage
+var newMessagesChannel = make(chan *gRPC.ChatMessage)
 
-func (s *Server) SendMessage(ctx context.Context, msg *gRPC.ChatMessage) (*gRPC.Ack, error) {
-	//add the message to the chat history
-	chatHistory = append(chatHistory, msg)
-
-	// make a status field for the Ack message??
-	return &gRPC.Ack{ /*Status: "Message Received"*/ }, nil
+type client struct {
+	stream gRPC.Chat_ReceiveMessageStreamServer
+	stop   chan bool
 }
 
-// remember to look in the proto file for the actual names..............
+var clients []*client // Slice to keep all clients
+
+func (s *Server) SendMessage(ctx context.Context, msg *gRPC.ChatMessage) (*gRPC.Ack, error) {
+	log.Printf("Received message from %s: %s", msg.ClientName, msg.Content) // Log the message
+	chatHistory = append(chatHistory, msg)
+	newMessagesChannel <- msg
+	return &gRPC.Ack{Status: "Message Received"}, nil
+}
+
 func (s *Server) ReceiveMessageStream(details *gRPC.ClientName, stream gRPC.Chat_ReceiveMessageStreamServer) error {
-	// Add chat history for this client and send it back.
-	for _, msg := range chatHistory {
-		if err := stream.Send(msg); err != nil {
-			return err
-		}
+	newClient := &client{
+		stream: stream,
+		stop:   make(chan bool),
 	}
-	return nil
+
+	clients = append(clients, newClient) // Add new client to the slice
+
+	go func() {
+		for {
+			select {
+			case msg := <-newMessagesChannel:
+				for _, client := range clients {
+					if err := client.stream.Send(msg); err != nil {
+						log.Printf("Error while sending message to client: %v", err)
+					}
+				}
+			case <-newClient.stop:
+				return
+			}
+		}
+	}()
+
+	<-stream.Context().Done()
+
+	newClient.stop <- true // Stop the go routine when client disconnects
+
+	return stream.Context().Err()
 }
 
 //testing messaging system end

@@ -241,7 +241,7 @@ type ChatMessage struct {
 	unknownFields protoimpl.UnknownFields
 
 	ClientName string `protobuf:"bytes,1,opt,name=clientName,proto3" json:"clientName,omitempty"`
-	Content    string `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	Content    string `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"` // Content field that should be limited to max 128 characters
 }
 
 func (x *ChatMessage) Reset() {

@@ -11,6 +11,8 @@ package proto;
 /*
 The Client: go run .\client\client.go
 The Server: go run .\server\server.go
+
+go run .\client\ alice
 */
 
 // The template service definition.
@@ -25,10 +27,8 @@ service Template
 }
 
 service Chat {
-    //testing messaging system start
     rpc SendMessage(ChatMessage) returns (Ack);
     rpc ReceiveMessageStream(ClientName) returns (stream ChatMessage);
-    //testing messaging system end
 }
 
 // Amount is a type containing a string and int. They are intialized as the first and second parameter value.
@@ -55,7 +55,7 @@ message Farewell {
 //testing messaging system start
 message ChatMessage {
     string clientName = 1;
-    string content = 2;
+    string content = 2; // Content field that should be limited to max 128 characters
 }
 
 message ClientName {

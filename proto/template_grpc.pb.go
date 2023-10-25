@@ -193,7 +193,6 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ChatClient interface {
-	// testing messaging system start
 	SendMessage(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*Ack, error)
 	ReceiveMessageStream(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (Chat_ReceiveMessageStreamClient, error)
 }
@@ -251,7 +250,6 @@ func (x *chatReceiveMessageStreamClient) Recv() (*ChatMessage, error) {
 // All implementations must embed UnimplementedChatServer
 // for forward compatibility
 type ChatServer interface {
-	// testing messaging system start
 	SendMessage(context.Context, *ChatMessage) (*Ack, error)
 	ReceiveMessageStream(*ClientName, Chat_ReceiveMessageStreamServer) error
 	mustEmbedUnimplementedChatServer()
