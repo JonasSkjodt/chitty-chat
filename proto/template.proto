@@ -27,32 +27,13 @@ go run .\client\ alice
 // }
 
 service Chat {
-    rpc SendMessage(ChatMessage) returns (Ack);
-    rpc ReceiveMessageStream(ClientName) returns (stream ChatMessage);
+    rpc MessageStream(stream ChatMessage) returns (stream ChatMessage);
+    rpc ConnectToServer(ClientName) returns (ClientID);
+    rpc DisconnectFromServer(ClientID) returns (ClientID);
 }
 
 // Amount is a type containing a string and int. They are intialized as the first and second parameter value.
-message Amount {
-    string clientName = 1;
-    int64 value = 2;
-}
 
-message Ack {
-    int64 newValue = 1;
-    //gave it a status for the chat system
-    string status = 2;
-}
-
-message Greeding {
-    string clientName = 1;
-    string message = 2;
-}
-
-message Farewell {
-    string message = 1;
-}
-
-//testing messaging system start
 message ChatMessage {
     string clientName = 1;
     string content = 2; // Content field that should be limited to max 128 characters
@@ -61,5 +42,8 @@ message ChatMessage {
 message ClientName {
     string clientName = 1;
 }
-//testing messaging system end
+
+message ClientID {
+    int32 clientID = 1;
+}
 

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -20,14 +20,15 @@ type chatServer struct {
 	name                         string // Not required but useful if you want to name your server
 	port                         string // Not required but useful if your server needs to know what port it's listening to
 
-	incrementValue int64      // value that clients can increment.
-	mutex          sync.Mutex // used to lock the server to avoid race conditions.
+	mutex sync.Mutex // used to lock the server to avoid race conditions.
 }
 
 // flags are used to get arguments from the terminal. Flags take a value, a default value and a description of the flag.
 // to use a flag then just add it as an argument when running the program.
 var serverName = flag.String("name", "default", "Senders name") // set with "-name <name>" in terminal
 var port = flag.String("port", "5400", "Server port")           // set with "-port <port>" in terminal
+var vectorClock = []int{}
+var nextID = 0 // vector clock for the server
 
 func main() {
 
@@ -61,9 +62,8 @@ func launchServer() {
 
 	// makes a new server instance using the name and port from the flags.
 	server := &chatServer{
-		name:           *serverName,
-		port:           *port,
-		incrementValue: 0, // gives default value, but not sure if it is necessary
+		name: *serverName,
+		port: *port,
 	}
 
 	gRPC.RegisterChatServer(grpcServer, server) //Registers the server to the gRPC server.
@@ -89,29 +89,29 @@ func launchServer() {
 // 	return &gRPC.Ack{NewValue: s.incrementValue}, nil
 // }
 
-// func (s *Server) SayHi(msgStream gRPC.Template_SayHiServer) error {
-// 	for {
-// 		// get the next message from the stream
-// 		msg, err := msgStream.Recv()
+func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) error {
+	for {
+		// get the next message from the stream
+		msg, err := msgStream.Recv()
 
-// 		// the stream is closed so we can exit the loop
-// 		if err == io.EOF {
-// 			break
-// 		}
-// 		// some other error
-// 		if err != nil {
-// 			return err
-// 		}
-// 		// log the message
-// 		log.Printf("Received message from %s: %s", msg.ClientName, msg.Message)
-// 	}
+		// the stream is closed so we can exit the loop
+		if err == io.EOF {
+			break
+		}
+		// some other error
+		if err != nil {
+			return err
+		}
+		// log the message
+		log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
 
-// 	// be a nice server and say goodbye to the client :)
-// 	ack := &gRPC.Farewell{Message: "Goodbye"}
-// 	msgStream.SendAndClose(ack)
+		msgStream.Send(msg)
+	}
 
-// 	return nil
-// }
+	// be a nice server and say goodbye to the client :)
+
+	return nil
+}
 
 // Get preferred outbound ip of this machine
 // Usefull if you have to know which ip you should dial, in a client running on an other computer
@@ -149,49 +149,42 @@ func setLog() *os.File {
 var chatHistory []*gRPC.ChatMessage
 var newMessagesChannel = make(chan *gRPC.ChatMessage)
 
-type client struct {
-	stream gRPC.Chat_ReceiveMessageStreamServer
-	stop   chan bool
-}
+// func (s *chatServer) SendMessage(ctx context.Context, msg *gRPC.ChatMessage) (*gRPC.Ack, error) {
+// 	log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content) // Log the message
+// 	chatHistory = append(chatHistory, msg)
+// 	newMessagesChannel <- msg
 
-var clients []*client // Slice to keep all clients
+// }
 
-func (s *chatServer) SendMessage(ctx context.Context, msg *gRPC.ChatMessage) (*gRPC.Ack, error) {
-	log.Printf("Received message from %s: %s", msg.ClientName, msg.Content) // Log the message
-	chatHistory = append(chatHistory, msg)
-	newMessagesChannel <- msg
-	return &gRPC.Ack{Status: "Message Received"}, nil
-}
+// func (s *chatServer) ReceiveMessageStream(details *gRPC.ChatMessage, stream gRPC.Chat_ReceiveMessageStreamServer) error {
+// 	newClient := &client{
+// 		stream: stream,
+// 		stop:   make(chan bool),
+// 	}
 
-func (s *chatServer) ReceiveMessageStream(details *gRPC.ClientName, stream gRPC.Chat_ReceiveMessageStreamServer) error {
-	newClient := &client{
-		stream: stream,
-		stop:   make(chan bool),
-	}
+// 	clients = append(clients, newClient) // Add new client to the slice
 
-	clients = append(clients, newClient) // Add new client to the slice
+// 	go func() {
+// 		for {
+// 			select {
+// 			case msg := <-newMessagesChannel:
+// 				log.Printf("New message received from %s: %s", msg.ClientName, msg.Content)
+// 				for _, client := range clients {
+// 					if err := client.stream.Send(msg); err != nil {
+// 						log.Printf("Error while sending message to client: %v", err)
+// 					}
+// 				}
+// 			case <-newClient.stop:
+// 				return
+// 			}
+// 		}
+// 	}()
 
-	go func() {
-		for {
-			select {
-			case msg := <-newMessagesChannel:
-				log.Printf("New message received from %s: %s", msg.ClientName, msg.Content)
-				for _, client := range clients {
-					if err := client.stream.Send(msg); err != nil {
-						log.Printf("Error while sending message to client: %v", err)
-					}
-				}
-			case <-newClient.stop:
-				return
-			}
-		}
-	}()
+// 	<-stream.Context().Done()
 
-	<-stream.Context().Done()
+// 	newClient.stop <- true // Stop the go routine when client disconnects
 
-	newClient.stop <- true // Stop the go routine when client disconnects
-
-	return stream.Context().Err()
-}
+// 	return stream.Context().Err()
+// }
 
 //testing messaging system end
