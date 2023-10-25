@@ -28,11 +28,14 @@ go run .\client\ alice
 
 service Chat {
     rpc MessageStream(stream ChatMessage) returns (stream ChatMessage);
-    rpc ConnectToServer(ClientName) returns (ClientID);
-    rpc DisconnectFromServer(ClientID) returns (ClientID);
+    rpc ConnectToServer(stream ClientName) returns (Ack);
 }
 
 // Amount is a type containing a string and int. They are intialized as the first and second parameter value.
+
+message Ack {
+    string message = 1;
+}
 
 message ChatMessage {
     string clientName = 1;

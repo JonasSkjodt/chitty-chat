@@ -47,6 +47,9 @@ func main() {
 		log.Fatalf("Error on receive: %v", err)
 	}
 
+	//chatServer.ConnectToServer(ChatStream.Context())
+	SendMessage("Test ", ChatStream)
+
 	//start the biding
 	go listenForMessages(ChatStream)
 	parseInput(ChatStream)
@@ -134,6 +137,7 @@ func SendMessage(content string, stream gRPC.Chat_MessageStreamClient) {
 	}
 
 	stream.Send(message)
+	stream.Send(message) // Server for some reason only reads every second message sent so this is just to clear the "buffer"
 }
 
 // watch the god
@@ -143,12 +147,15 @@ func listenForMessages(stream gRPC.Chat_MessageStreamClient) {
 		if stream != nil {
 			msg, err := stream.Recv()
 			if err == io.EOF {
+				log.Printf("Error: io.EOF in listenForMessages in client.go")
 				break
 			}
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
-			log.Printf("Received message: %s from %s", msg.Content, msg.ClientName)
+			if msg.ClientName != *clientsName {
+				log.Printf("Received message: %s from %s", msg.Content, msg.ClientName)
+			}
 		}
 	}
 }

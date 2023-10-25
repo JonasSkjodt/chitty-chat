@@ -21,6 +21,7 @@ type chatServer struct {
 	port                         string // Not required but useful if your server needs to know what port it's listening to
 
 	mutex sync.Mutex // used to lock the server to avoid race conditions.
+
 }
 
 // flags are used to get arguments from the terminal. Flags take a value, a default value and a description of the flag.
@@ -29,6 +30,8 @@ var serverName = flag.String("name", "default", "Senders name") // set with "-na
 var port = flag.String("port", "5400", "Server port")           // set with "-port <port>" in terminal
 var vectorClock = []int{}
 var nextID = 0 // vector clock for the server
+var chatHistory []*gRPC.ChatMessage
+var newMessagesChannel = make(chan *gRPC.ChatMessage)
 
 func main() {
 
@@ -83,11 +86,12 @@ func launchServer() {
 // 	s.mutex.Lock()
 // 	defer s.mutex.Unlock()
 
-// 	// increments the value by the amount given in the request,
-// 	// and returns the new value.
-// 	s.incrementValue += int64(Amount.GetValue())
-// 	return &gRPC.Ack{NewValue: s.incrementValue}, nil
-// }
+//		// increments the value by the amount given in the request,
+//		// and returns the new value.
+//		s.incrementValue += int64(Amount.GetValue())
+//		return &gRPC.Ack{NewValue: s.incrementValue}, nil
+//	}
+var clientNames = make(map[string]gRPC.Chat_MessageStreamServer)
 
 func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) error {
 	for {
@@ -96,25 +100,47 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 
 		// the stream is closed so we can exit the loop
 		if err == io.EOF {
+			log.Printf("Error: io.EOF in MessageStream in server.go")
 			break
 		}
 		// some other error
 		if err != nil {
+			log.Printf("Error: != nil in MessageStream in server.go")
 			return err
 		}
 		// log the message
 		log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
 
-		msgStream.Send(msg)
-	}
+		ConnectToServer(msgStream)
 
-	// be a nice server and say goodbye to the client :)
+		go func() {
+			for name := range clientNames {
+				clientNames[name].Send(msg)
+			}
+		}()
+
+		//msgStream.Send(msg)
+		//newMessagesChannel <- msg
+
+	}
 
 	return nil
 }
 
 // Get preferred outbound ip of this machine
 // Usefull if you have to know which ip you should dial, in a client running on an other computer
+
+func ConnectToServer(msgStream gRPC.Chat_MessageStreamServer) error {
+	msg, err := msgStream.Recv()
+
+	// some other error
+	if err != nil {
+		log.Fatal("Failed in connecting to the server, with error:  %s", err)
+		return err
+	}
+	clientNames[msg.ClientName] = msgStream
+	return nil
+}
 
 func GetOutboundIP() net.IP {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
@@ -145,9 +171,6 @@ func setLog() *os.File {
 }
 
 // testing messaging system start
-
-var chatHistory []*gRPC.ChatMessage
-var newMessagesChannel = make(chan *gRPC.ChatMessage)
 
 // func (s *chatServer) SendMessage(ctx context.Context, msg *gRPC.ChatMessage) (*gRPC.Ack, error) {
 // 	log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content) // Log the message
