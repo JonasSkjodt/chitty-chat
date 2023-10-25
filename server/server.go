@@ -100,12 +100,10 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 
 		// the stream is closed so we can exit the loop
 		if err == io.EOF {
-			log.Printf("Error: io.EOF in MessageStream in server.go")
 			break
 		}
 		// some other error
 		if err != nil {
-			log.Printf("Error: != nil in MessageStream in server.go")
 			return err
 		}
 		// log the message
@@ -119,16 +117,10 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			}
 		}()
 
-		//msgStream.Send(msg)
-		//newMessagesChannel <- msg
-
 	}
 
 	return nil
 }
-
-// Get preferred outbound ip of this machine
-// Usefull if you have to know which ip you should dial, in a client running on an other computer
 
 func ConnectToServer(msgStream gRPC.Chat_MessageStreamServer) error {
 	msg, err := msgStream.Recv()
@@ -142,6 +134,8 @@ func ConnectToServer(msgStream gRPC.Chat_MessageStreamServer) error {
 	return nil
 }
 
+// Get preferred outbound ip of this machine
+// Usefull if you have to know which ip you should dial, in a client running on an other computer
 func GetOutboundIP() net.IP {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
@@ -169,45 +163,3 @@ func setLog() *os.File {
 	log.SetOutput(f)
 	return f
 }
-
-// testing messaging system start
-
-// func (s *chatServer) SendMessage(ctx context.Context, msg *gRPC.ChatMessage) (*gRPC.Ack, error) {
-// 	log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content) // Log the message
-// 	chatHistory = append(chatHistory, msg)
-// 	newMessagesChannel <- msg
-
-// }
-
-// func (s *chatServer) ReceiveMessageStream(details *gRPC.ChatMessage, stream gRPC.Chat_ReceiveMessageStreamServer) error {
-// 	newClient := &client{
-// 		stream: stream,
-// 		stop:   make(chan bool),
-// 	}
-
-// 	clients = append(clients, newClient) // Add new client to the slice
-
-// 	go func() {
-// 		for {
-// 			select {
-// 			case msg := <-newMessagesChannel:
-// 				log.Printf("New message received from %s: %s", msg.ClientName, msg.Content)
-// 				for _, client := range clients {
-// 					if err := client.stream.Send(msg); err != nil {
-// 						log.Printf("Error while sending message to client: %v", err)
-// 					}
-// 				}
-// 			case <-newClient.stop:
-// 				return
-// 			}
-// 		}
-// 	}()
-
-// 	<-stream.Context().Done()
-
-// 	newClient.stop <- true // Stop the go routine when client disconnects
-
-// 	return stream.Context().Err()
-// }
-
-//testing messaging system end

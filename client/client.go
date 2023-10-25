@@ -47,8 +47,7 @@ func main() {
 		log.Fatalf("Error on receive: %v", err)
 	}
 
-	//chatServer.ConnectToServer(ChatStream.Context())
-	SendMessage("Test ", ChatStream)
+	SendMessage(*clientsName+" has connected", ChatStream)
 
 	//start the biding
 	go listenForMessages(ChatStream)
@@ -154,7 +153,7 @@ func listenForMessages(stream gRPC.Chat_MessageStreamClient) {
 				log.Fatalf("%v", err)
 			}
 			if msg.ClientName != *clientsName {
-				log.Printf("Received message: %s from %s", msg.Content, msg.ClientName)
+				log.Printf("%s: %s", msg.ClientName, msg.Content)
 			}
 		}
 	}
