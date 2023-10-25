@@ -17,14 +17,14 @@ go run .\client\ alice
 
 // The template service definition.
 // you can call it whatever you want
-service Template
-{
-    // one message is sent and one is recieved
-    rpc Increment (Amount) returns (Ack);
+// service Template
+// {
+//     // one message is sent and one is recieved
+//     rpc Increment (Amount) returns (Ack);
 
-    // many messages are sent and one is recieved
-    rpc SayHi (stream Greeding) returns (Farewell);
-}
+//     // many messages are sent and one is recieved
+//     rpc SayHi (stream Greeding) returns (Farewell);
+// }
 
 service Chat {
     rpc SendMessage(ChatMessage) returns (Ack);

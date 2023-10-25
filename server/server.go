@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -16,10 +15,10 @@ import (
 	"google.golang.org/grpc"
 )
 
-type Server struct {
-	gRPC.UnimplementedTemplateServer        // You need this line if you have a server
-	name                             string // Not required but useful if you want to name your server
-	port                             string // Not required but useful if your server needs to know what port it's listening to
+type chatServer struct {
+	gRPC.UnimplementedChatServer        // You need this line if you have a server
+	name                         string // Not required but useful if you want to name your server
+	port                         string // Not required but useful if your server needs to know what port it's listening to
 
 	incrementValue int64      // value that clients can increment.
 	mutex          sync.Mutex // used to lock the server to avoid race conditions.
@@ -61,13 +60,13 @@ func launchServer() {
 	grpcServer := grpc.NewServer(opts...)
 
 	// makes a new server instance using the name and port from the flags.
-	server := &Server{
+	server := &chatServer{
 		name:           *serverName,
 		port:           *port,
 		incrementValue: 0, // gives default value, but not sure if it is necessary
 	}
 
-	gRPC.RegisterTemplateServer(grpcServer, server) //Registers the server to the gRPC server.
+	gRPC.RegisterChatServer(grpcServer, server) //Registers the server to the gRPC server.
 
 	log.Printf("Server %s: Listening at %v\n", *serverName, list.Addr())
 
@@ -78,44 +77,45 @@ func launchServer() {
 }
 
 // The method format can be found in the pb.go file. If the format is wrong, the server type will give an error.
-func (s *Server) Increment(ctx context.Context, Amount *gRPC.Amount) (*gRPC.Ack, error) {
-	// locks the server ensuring no one else can increment the value at the same time.
-	// and unlocks the server when the method is done.
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+// func (s *Server) Increment(ctx context.Context, Amount *gRPC.Amount) (*gRPC.Ack, error) {
+// 	// locks the server ensuring no one else can increment the value at the same time.
+// 	// and unlocks the server when the method is done.
+// 	s.mutex.Lock()
+// 	defer s.mutex.Unlock()
 
-	// increments the value by the amount given in the request,
-	// and returns the new value.
-	s.incrementValue += int64(Amount.GetValue())
-	return &gRPC.Ack{NewValue: s.incrementValue}, nil
-}
+// 	// increments the value by the amount given in the request,
+// 	// and returns the new value.
+// 	s.incrementValue += int64(Amount.GetValue())
+// 	return &gRPC.Ack{NewValue: s.incrementValue}, nil
+// }
 
-func (s *Server) SayHi(msgStream gRPC.Template_SayHiServer) error {
-	for {
-		// get the next message from the stream
-		msg, err := msgStream.Recv()
+// func (s *Server) SayHi(msgStream gRPC.Template_SayHiServer) error {
+// 	for {
+// 		// get the next message from the stream
+// 		msg, err := msgStream.Recv()
 
-		// the stream is closed so we can exit the loop
-		if err == io.EOF {
-			break
-		}
-		// some other error
-		if err != nil {
-			return err
-		}
-		// log the message
-		log.Printf("Received message from %s: %s", msg.ClientName, msg.Message)
-	}
+// 		// the stream is closed so we can exit the loop
+// 		if err == io.EOF {
+// 			break
+// 		}
+// 		// some other error
+// 		if err != nil {
+// 			return err
+// 		}
+// 		// log the message
+// 		log.Printf("Received message from %s: %s", msg.ClientName, msg.Message)
+// 	}
 
-	// be a nice server and say goodbye to the client :)
-	ack := &gRPC.Farewell{Message: "Goodbye"}
-	msgStream.SendAndClose(ack)
+// 	// be a nice server and say goodbye to the client :)
+// 	ack := &gRPC.Farewell{Message: "Goodbye"}
+// 	msgStream.SendAndClose(ack)
 
-	return nil
-}
+// 	return nil
+// }
 
 // Get preferred outbound ip of this machine
 // Usefull if you have to know which ip you should dial, in a client running on an other computer
+
 func GetOutboundIP() net.IP {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
@@ -145,6 +145,7 @@ func setLog() *os.File {
 }
 
 // testing messaging system start
+
 var chatHistory []*gRPC.ChatMessage
 var newMessagesChannel = make(chan *gRPC.ChatMessage)
 
@@ -155,14 +156,14 @@ type client struct {
 
 var clients []*client // Slice to keep all clients
 
-func (s *Server) SendMessage(ctx context.Context, msg *gRPC.ChatMessage) (*gRPC.Ack, error) {
+func (s *chatServer) SendMessage(ctx context.Context, msg *gRPC.ChatMessage) (*gRPC.Ack, error) {
 	log.Printf("Received message from %s: %s", msg.ClientName, msg.Content) // Log the message
 	chatHistory = append(chatHistory, msg)
 	newMessagesChannel <- msg
 	return &gRPC.Ack{Status: "Message Received"}, nil
 }
 
-func (s *Server) ReceiveMessageStream(details *gRPC.ClientName, stream gRPC.Chat_ReceiveMessageStreamServer) error {
+func (s *chatServer) ReceiveMessageStream(details *gRPC.ClientName, stream gRPC.Chat_ReceiveMessageStreamServer) error {
 	newClient := &client{
 		stream: stream,
 		stop:   make(chan bool),
@@ -174,6 +175,7 @@ func (s *Server) ReceiveMessageStream(details *gRPC.ClientName, stream gRPC.Chat
 		for {
 			select {
 			case msg := <-newMessagesChannel:
+				log.Printf("New message received from %s: %s", msg.ClientName, msg.Content)
 				for _, client := range clients {
 					if err := client.stream.Send(msg); err != nil {
 						log.Printf("Error while sending message to client: %v", err)
