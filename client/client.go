@@ -116,7 +116,7 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 
 		if input == "exit" {
 			chatServer.DisconnectFromServer(stream.Context(), &gRPC.ClientName{ClientName: *clientsName})
-			os.Exit(0)
+			os.Exit(1)
 		} else {
 			SendMessage(input, stream)
 		}

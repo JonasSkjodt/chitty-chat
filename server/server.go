@@ -97,6 +97,7 @@ var clientNames = make(map[string]gRPC.Chat_MessageStreamServer)
 
 func DeleteUser(clientName string) {
 	if clientName != "" {
+		clientNames[clientName] = nil
 		delete(clientNames, clientName)
 		log.Printf("%s has diconnected\n", clientName)
 	}
