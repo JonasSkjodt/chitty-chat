@@ -30,13 +30,15 @@ type chatServer struct {
 // to use a flag then just add it as an argument when running the program.
 var serverName = flag.String("name", "default", "Senders name") // set with "-name <name>" in terminal
 var port = flag.String("port", "5400", "Server port")           // set with "-port <port>" in terminal
-var vectorClock = []int{}
-var nextID = 0 // vector clock for the server
+var vectorClock = []int{0}
+var clientID = 1
+var nextNumClock = 0 // vector clock for the server
 var chatHistory []*gRPC.ChatMessage
 var newMessagesChannel = make(chan *gRPC.ChatMessage)
 
-// channel for new messages
-var MessageRecievedChannel = make(chan *gRPC.ChatMessage)
+// Maps
+var clientNames = make(map[string]gRPC.Chat_MessageStreamServer)
+var clientIDs = make(map[string]int)
 
 func main() {
 
@@ -97,12 +99,30 @@ func launchServer() {
 //		s.incrementValue += int64(Amount.GetValue())
 //		return &gRPC.Ack{NewValue: s.incrementValue}, nil
 //	}
-var clientNames = make(map[string]gRPC.Chat_MessageStreamServer)
 
 func DeleteUser(clientName string) {
 	if clientName != "" {
-		clientNames[clientName] = nil
+		//Deletes the index of the client from the vector clock
+		// Curtiousy of https://www.geeksforgeeks.org/delete-elements-in-a-slice-in-golang/
+		vectorClock = append(vectorClock[:clientIDs[clientName]], vectorClock[clientIDs[clientName]+1:]...)
+
+		//Reduces the clientID of all clients with a higher ID than the deleted client
+		for name := range clientIDs {
+			if clientIDs[name] > clientIDs[clientName] {
+				clientIDs[name]--
+			}
+		}
+
+		//TODO Sends the vector clock to all clients with -1 on the deleted client
+
+		//Deletes the client from the clientIDs map
+		delete(clientIDs, clientName)
+
+		//Updates the clientID of the next client to connect
+		clientID = len(clientIDs) + 1
+		//Deletes the client from the clientNames map
 		delete(clientNames, clientName)
+
 		log.Printf("%s has diconnected\n", clientName)
 	}
 }
@@ -122,6 +142,14 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 		hasher.Write([]byte(msg.ClientName))
 		if msg.Content == fmt.Sprint(hasher.Sum32()) {
 			clientNames[msg.ClientName] = msgStream
+			clientIDs[msg.ClientName] = clientID
+			clientID++
+
+			log.Printf("Client %s: Connected to the server", msg.ClientName)
+			SendMessages(&gRPC.ChatMessage{ClientName: "Server", Content: fmt.Sprintf("%s Connected at Lamport Timestamp ", msg.ClientName)})
+
+			vectorClock = append(vectorClock, 0)
+
 			hasher = nil
 
 		} else {
