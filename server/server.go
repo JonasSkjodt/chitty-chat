@@ -146,7 +146,11 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			clientID++
 
 			log.Printf("Client %s: Connected to the server", msg.ClientName)
-			SendMessages(&gRPC.ChatMessage{ClientName: "Server", Content: fmt.Sprintf("%s Connected at Lamport Timestamp ", msg.ClientName)})
+
+			nextNumClock++                      //increment the vector clcok
+			msg.Timestamp = int64(nextNumClock) //set timestamp of message
+
+			SendMessages(&gRPC.ChatMessage{ClientName: "Server", Content: fmt.Sprintf("%s Connected at Lamport Timestamp %d", msg.ClientName, msg.Timestamp)})
 
 			vectorClock = append(vectorClock, 0)
 
@@ -160,6 +164,9 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			// the stream is closed so we can exit the loop
 			// log the message
 			log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
+			//vector clcok
+			nextNumClock++
+			msg.Timestamp = int64(nextNumClock)
 			// send the message to all clients
 			SendMessages(msg)
 
@@ -192,11 +199,13 @@ func (s *chatServer) DisconnectFromServer(ctx context.Context, name *gRPC.Client
 	log.Printf("Client %s: Disconnected from the server", name.ClientName)
 	DeleteUser(name.ClientName)
 
+	//increment vector clock
+	nextNumClock++
+
 	//sends a message to the rest of the clients logged into the server that a client who pressed exit left chitty chat
 	msg := &gRPC.ChatMessage{
 		ClientName: "Server",
-		//TO DO get the proper lamport time
-		Content: fmt.Sprintf("Participant %s left Chitty-Chat at Lamport time ", name.ClientName),
+		Content:    fmt.Sprintf("Participant %s left Chitty-Chat at Lamport time %d", name.ClientName, nextNumClock), Timestamp: int64(nextNumClock),
 	}
 	SendMessages(msg) // Broadcast the "left" message
 	return &gRPC.Ack{Message: "success"}, nil

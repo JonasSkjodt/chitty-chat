@@ -40,7 +40,8 @@ message Ack {
 
 message ChatMessage {
     string clientName = 1;
-    string content = 2; // Content field that should be limited to max 128 characters
+    string content = 2;
+    int64 timestamp = 3;
 }
 
 message ClientName {
