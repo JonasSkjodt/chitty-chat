@@ -41,6 +41,7 @@ func main() {
 	//connect to server and close the connection when program closes
 	fmt.Println("--- join Server ---")
 	ConnectToServer()
+	//defer SendMessage("exit", ChatStream)
 	defer ServerConn.Close()
 
 	ChatStream, err := chatServer.MessageStream(context.Background())

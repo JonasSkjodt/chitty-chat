@@ -35,6 +35,9 @@ var nextID = 0 // vector clock for the server
 var chatHistory []*gRPC.ChatMessage
 var newMessagesChannel = make(chan *gRPC.ChatMessage)
 
+// channel for new messages
+var MessageRecievedChannel = make(chan *gRPC.ChatMessage)
+
 func main() {
 
 	// f := setLog() //uncomment this line to log to a log.txt file instead of the console
@@ -78,6 +81,7 @@ func launchServer() {
 	if err := grpcServer.Serve(list); err != nil {
 		log.Fatalf("failed to serve %v", err)
 	}
+	//go SendMessages()
 	// code here is unreachable because grpcServer.Serve occupies the current thread.
 }
 
@@ -107,6 +111,13 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 	for {
 		// get the next message from the stream
 		msg, err := msgStream.Recv()
+		if err == io.EOF {
+			break
+		}
+		// some other error
+		if err != nil {
+			return err
+		}
 		hasher := fnv.New32()
 		hasher.Write([]byte(msg.ClientName))
 		if msg.Content == fmt.Sprint(hasher.Sum32()) {
@@ -114,31 +125,27 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			hasher = nil
 
 		} else {
-
 			// if msg.Content == "exit" {
 			// 	DeleteUser(msg.ClientName)
 			// }
 
 			// the stream is closed so we can exit the loop
-			if err == io.EOF {
-				break
-			}
-			// some other error
-			if err != nil {
-				return err
-			}
 			// log the message
 			log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
+			// send the message to all clients
+			SendMessages(msg)
 
-			go func() {
-				for name := range clientNames {
-					clientNames[name].Send(msg)
-				}
-			}()
 		}
 	}
 
 	return nil
+}
+
+func SendMessages(msg *gRPC.ChatMessage) {
+	//var msg = <-newMessagesChannel
+	for name := range clientNames {
+		clientNames[name].Send(msg)
+	}
 }
 
 // func (s *chatServer) ConnectToServer(msgStream gRPC.Chat_ConnectToServerServer) error {
