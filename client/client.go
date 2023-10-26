@@ -88,6 +88,7 @@ func ConnectToServer() {
 
 func parseInput(stream gRPC.Chat_MessageStreamClient) {
 	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("Welcome to Chitty Chat!")
 	fmt.Println("--------------------")
 
 	//Infinite loop to listen for clients input.
@@ -100,6 +101,12 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 			log.Fatal(err)
 		}
 		input = strings.TrimSpace(input) //Trim input
+
+		// check if the input is longer than 128 characters
+		if len(input) > 128 {
+			log.Println("Message is too long, please enter a message of up to 128 characters.")
+			continue
+		}
 
 		if !conReady(chatServer) {
 			log.Printf("Client %s: something was wrong with the connection to the server :(", *clientsName)
