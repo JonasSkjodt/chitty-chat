@@ -108,6 +108,12 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 			continue
 		}
 
+		// when one client disconnects, broadcast the event to other clients
+		if input == "exit" {
+			chatServer.DisconnectFromServer(context.Background(), &gRPC.ClientName{ClientName: *clientsName})
+			os.Exit(1)
+		}
+
 		if !conReady(chatServer) {
 			log.Printf("Client %s: something was wrong with the connection to the server :(", *clientsName)
 			continue

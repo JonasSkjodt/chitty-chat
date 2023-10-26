@@ -189,8 +189,16 @@ func SendMessages(msg *gRPC.ChatMessage) {
 
 // Method that disconnects a client from the server
 func (s *chatServer) DisconnectFromServer(ctx context.Context, name *gRPC.ClientName) (*gRPC.Ack, error) {
-	log.Printf("Client %s: Disconnected from the server", name)
+	log.Printf("Client %s: Disconnected from the server", name.ClientName)
 	DeleteUser(name.ClientName)
+
+	//sends a message to the rest of the clients logged into the server that a client who pressed exit left chitty chat
+	msg := &gRPC.ChatMessage{
+		ClientName: "Server",
+		//TO DO get the proper lamport time
+		Content: fmt.Sprintf("Participant %s left Chitty-Chat at Lamport time ", name.ClientName),
+	}
+	SendMessages(msg) // Broadcast the "left" message
 	return &gRPC.Ack{Message: "success"}, nil
 }
 
