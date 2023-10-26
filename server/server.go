@@ -145,7 +145,7 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			clientIDs[msg.ClientName] = clientID
 			clientID++
 
-			log.Printf("Client %s: Connected to the server", msg.ClientName)
+			log.Printf("Participant %s: Connected to the server", msg.ClientName)
 
 			nextNumClock++                      //increment the vector clcok
 			msg.Timestamp = int64(nextNumClock) //set timestamp of message
@@ -196,7 +196,7 @@ func SendMessages(msg *gRPC.ChatMessage) {
 
 // Method that disconnects a client from the server
 func (s *chatServer) DisconnectFromServer(ctx context.Context, name *gRPC.ClientName) (*gRPC.Ack, error) {
-	log.Printf("Client %s: Disconnected from the server", name.ClientName)
+	log.Printf("Participant %s: Disconnected from the server", name.ClientName)
 	DeleteUser(name.ClientName)
 
 	//increment vector clock

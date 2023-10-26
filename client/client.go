@@ -115,7 +115,7 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 		}
 
 		if !conReady(chatServer) {
-			log.Printf("Client %s: something was wrong with the connection to the server :(", *clientsName)
+			log.Printf("Participant %s: something was wrong with the connection to the server :(", *clientsName)
 			continue
 		}
 
