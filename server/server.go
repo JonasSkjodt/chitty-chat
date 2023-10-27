@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 
 	// this has to be the same as the go.mod module,
@@ -30,7 +31,7 @@ type chatServer struct {
 // to use a flag then just add it as an argument when running the program.
 var serverName = flag.String("name", "default", "Senders name") // set with "-name <name>" in terminal
 var port = flag.String("port", "5400", "Server port")           // set with "-port <port>" in terminal
-var vectorClock = []int{0}
+var vectorClock = []int32{0}
 var clientID = 1
 var nextNumClock = 0 // vector clock for the server
 var chatHistory []*gRPC.ChatMessage
@@ -102,24 +103,6 @@ func launchServer() {
 
 func DeleteUser(clientName string) {
 	if clientName != "" {
-		//Deletes the index of the client from the vector clock
-		// Curtiousy of https://www.geeksforgeeks.org/delete-elements-in-a-slice-in-golang/
-		vectorClock = append(vectorClock[:clientIDs[clientName]], vectorClock[clientIDs[clientName]+1:]...)
-
-		//Reduces the clientID of all clients with a higher ID than the deleted client
-		for name := range clientIDs {
-			if clientIDs[name] > clientIDs[clientName] {
-				clientIDs[name]--
-			}
-		}
-
-		//TODO Sends the vector clock to all clients with -1 on the deleted client
-
-		//Deletes the client from the clientIDs map
-		delete(clientIDs, clientName)
-
-		//Updates the clientID of the next client to connect
-		clientID = len(clientIDs) + 1
 		//Deletes the client from the clientNames map
 		delete(clientNames, clientName)
 
@@ -146,12 +129,35 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			clientID++
 
 			log.Printf("Client %s: Connected to the server", msg.ClientName)
-			SendMessages(&gRPC.ChatMessage{ClientName: "Server", Content: fmt.Sprintf("%s Connected at Lamport Timestamp ", msg.ClientName)})
 
+			//Adds the client to the vector clock
+			//TODO does the server need to count its vector clock up? And does the client need to as well?
 			vectorClock = append(vectorClock, 0)
+			vectorClock[0]++
+			vectorClock[clientID-1]++
+
+			//
+			SendMessages(&gRPC.ChatMessage{VectorClock: vectorClock, ClientID: int32(clientID - 1), ClientName: "Server", Content: fmt.Sprintf("%s Connected ", msg.ClientName)})
 
 			hasher = nil
 
+		} else if strings.Contains(msg.Content, "Client "+msg.ClientName+": Disconnected from the server") {
+			DeleteUser(msg.ClientName)
+
+			// log the message
+			log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
+
+			// Counts the clients vector clock up
+			vectorClock[clientIDs[msg.ClientName]]++
+			vectorClock[0]++
+
+			//Adds the vector clock to the message
+			msg.VectorClock = vectorClock
+
+			// send the message to all clients
+			SendMessages(msg)
+
+			
 		} else {
 			// if msg.Content == "exit" {
 			// 	DeleteUser(msg.ClientName)
@@ -160,6 +166,14 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			// the stream is closed so we can exit the loop
 			// log the message
 			log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
+
+			// Counts the clients vector clock up
+			vectorClock[clientIDs[msg.ClientName]]++
+			vectorClock[0]++
+
+			//Adds the vector clock to the message
+			msg.VectorClock = vectorClock
+
 			// send the message to all clients
 			SendMessages(msg)
 
@@ -172,6 +186,8 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 func SendMessages(msg *gRPC.ChatMessage) {
 	//var msg = <-newMessagesChannel
 	for name := range clientNames {
+		vectorClock[0]++
+		msg.VectorClock = vectorClock
 		clientNames[name].Send(msg)
 	}
 }
