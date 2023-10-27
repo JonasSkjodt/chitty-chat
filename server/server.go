@@ -33,8 +33,6 @@ var port = flag.String("port", "5400", "Server port")           // set with "-po
 var vectorClock = []int{0}
 var clientID = 1
 var nextNumClock = 0 // vector clock for the server
-var chatHistory []*gRPC.ChatMessage
-var newMessagesChannel = make(chan *gRPC.ChatMessage)
 
 // Maps
 var clientNames = make(map[string]gRPC.Chat_MessageStreamServer)
@@ -83,22 +81,8 @@ func launchServer() {
 	if err := grpcServer.Serve(list); err != nil {
 		log.Fatalf("failed to serve %v", err)
 	}
-	//go SendMessages()
 	// code here is unreachable because grpcServer.Serve occupies the current thread.
 }
-
-// The method format can be found in the pb.go file. If the format is wrong, the server type will give an error.
-// func (s *Server) Increment(ctx context.Context, Amount *gRPC.Amount) (*gRPC.Ack, error) {
-// 	// locks the server ensuring no one else can increment the value at the same time.
-// 	// and unlocks the server when the method is done.
-// 	s.mutex.Lock()
-// 	defer s.mutex.Unlock()
-
-//		// increments the value by the amount given in the request,
-//		// and returns the new value.
-//		s.incrementValue += int64(Amount.GetValue())
-//		return &gRPC.Ack{NewValue: s.incrementValue}, nil
-//	}
 
 func DeleteUser(clientName string) {
 	if clientName != "" {
@@ -147,6 +131,12 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 
 			log.Printf("Participant %s: Connected to the server", msg.ClientName)
 
+			/*
+				algorithm for lamport timestamp should fullfill the following (if we dont use vector clock)
+				1: When a process does work, increment the counter.
+				2: When a process sends a message, include its counter.
+				3: When a process receives a message, it takes the maximum of its own counter and the received counter from the message, then increments the counter by one.
+			*/
 			nextNumClock++                      //increment the vector clcok
 			msg.Timestamp = int64(nextNumClock) //set timestamp of message
 
@@ -157,14 +147,14 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			hasher = nil
 
 		} else {
-			// if msg.Content == "exit" {
-			// 	DeleteUser(msg.ClientName)
-			// }
 
 			// the stream is closed so we can exit the loop
 			// log the message
 			log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
-			//vector clcok
+			//lamports clock
+			if msg.Timestamp > int64(nextNumClock) {
+				nextNumClock = int(msg.Timestamp)
+			}
 			nextNumClock++
 			msg.Timestamp = int64(nextNumClock)
 			// send the message to all clients
@@ -182,17 +172,6 @@ func SendMessages(msg *gRPC.ChatMessage) {
 		clientNames[name].Send(msg)
 	}
 }
-
-// func (s *chatServer) ConnectToServer(msgStream gRPC.Chat_ConnectToServerServer) error {
-// 	msg, err := msgStream.Recv()
-
-// 	// some other error
-// 	if err != nil {
-// 		log.Fatal("Failed in connecting to the server, with error:  %s", err)
-// 	}
-// 	clientNames[msg.ClientName] = msgStream
-// 	return nil
-// }
 
 // Method that disconnects a client from the server
 func (s *chatServer) DisconnectFromServer(ctx context.Context, name *gRPC.ClientName) (*gRPC.Ack, error) {
