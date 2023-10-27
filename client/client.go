@@ -50,7 +50,7 @@ func main() {
 
 	ChatStream, err := chatServer.MessageStream(context.Background())
 	if err != nil {
-		fmt.Printf("Error on receive: %v", err)
+		fmt.Printf("Error on receive: %v \n", err)
 		log.Fatalf("Error on receive: %v", err)
 	}
 	hasher.Write([]byte(*clientsName))
@@ -80,6 +80,7 @@ func ConnectToServer() {
 	log.Printf("client %s: Attempts to dial on port %s\n", *clientsName, *serverPort)
 	conn, err := grpc.Dial(fmt.Sprintf(":%s", *serverPort), opts...)
 	if err != nil {
+		fmt.Printf("Fail to Dial : %v \n", err)
 		log.Printf("Fail to Dial : %v", err)
 		return
 	}
@@ -104,6 +105,7 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 		//Read input into var input and any errors into err
 		input, err := reader.ReadString('\n')
 		if err != nil {
+			fmt.Printf("%v \n", err)
 			log.Fatal(err)
 		}
 		input = strings.TrimSpace(input) //Trim input
@@ -141,7 +143,7 @@ func conReady(s gRPC.ChatClient) bool {
 
 // sets the logger to use a log.txt file instead of the console
 func setLog() *os.File {
-	f, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile("log_"+*clientsName+".txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		fmt.Printf("error opening file: %v", err)
 		log.Fatalf("error opening file: %v", err)
@@ -166,7 +168,7 @@ func SendMessage(content string, stream gRPC.Chat_MessageStreamClient) {
 		i++
 		stream.Send(message)
 	} else {
-		stream.Send(message)
+		//stream.Send(message)
 		stream.Send(message) // Server for some reason only reads every second message sent so this is just to clear the "buffer"
 	}
 }
@@ -178,10 +180,12 @@ func listenForMessages(stream gRPC.Chat_MessageStreamClient) {
 		if stream != nil {
 			msg, err := stream.Recv()
 			if err == io.EOF {
+				fmt.Printf("Error: io.EOF in listenForMessages in client.go \n")
 				log.Printf("Error: io.EOF in listenForMessages in client.go")
 				break
 			}
 			if err != nil {
+				fmt.Printf("%v \n", err)
 				log.Fatalf("%v", err)
 			}
 			if strings.Contains(msg.Content, *clientsName+" Connected") {

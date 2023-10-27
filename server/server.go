@@ -57,11 +57,13 @@ func main() {
 }
 
 func launchServer() {
+	fmt.Printf("Server %s: Attempts to create listener on port %s\n", *serverName, *port)
 	log.Printf("Server %s: Attempts to create listener on port %s\n", *serverName, *port)
 
 	// Create listener tcp on given port or default port 5400
 	list, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", *port))
 	if err != nil {
+		fmt.Printf("Server %s: Failed to listen on port %s: %v \n", *serverName, *port, err)
 		log.Printf("Server %s: Failed to listen on port %s: %v", *serverName, *port, err) //If it fails to listen on the port, run launchServer method again with the next value/port in ports array
 		return
 	}
@@ -79,9 +81,11 @@ func launchServer() {
 
 	gRPC.RegisterChatServer(grpcServer, server) //Registers the server to the gRPC server.
 
-	log.Printf("Server %s: Listening at %v\n", *serverName, list.Addr())
+	fmt.Printf("Server %s: Listening at %v \n", *serverName, list.Addr())
+	log.Printf("Server %s: Listening at %v \n", *serverName, list.Addr())
 
 	if err := grpcServer.Serve(list); err != nil {
+		fmt.Printf("failed to serve %v", err)
 		log.Fatalf("failed to serve %v", err)
 	}
 	//go SendMessages()
@@ -106,7 +110,8 @@ func DeleteUser(clientName string) {
 		//Deletes the client from the clientNames map
 		delete(clientNames, clientName)
 
-		log.Printf("%s has diconnected\n", clientName)
+		fmt.Printf("%s has diconnected At lamport timestamp: %d \n", clientName, vectorClock)
+		log.Printf("%s has diconnected At lamport timestamp: %d\n", clientName, vectorClock)
 	}
 }
 
@@ -128,7 +133,8 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			clientIDs[msg.ClientName] = clientID
 			clientID++
 
-			log.Printf("Client %s: Connected to the server", msg.ClientName)
+			fmt.Printf("Client %s: Connected to the server At lamport timestamp: %d \n", msg.ClientName, vectorClock)
+			log.Printf("Client %s: Connected to the server At lamport timestamp: %d", msg.ClientName, vectorClock)
 
 			//Adds the client to the vector clock
 			//TODO does the server need to count its vector clock up? And does the client need to as well?
@@ -142,11 +148,6 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			hasher = nil
 
 		} else if strings.Contains(msg.Content, "Client "+msg.ClientName+": Disconnected from the server") {
-			DeleteUser(msg.ClientName)
-
-			// log the message
-			log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
-
 			// Counts the clients vector clock up
 			vectorClock[clientIDs[msg.ClientName]]++
 			vectorClock[0]++
@@ -154,10 +155,11 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			//Adds the vector clock to the message
 			msg.VectorClock = vectorClock
 
+			DeleteUser(msg.ClientName)
+
 			// send the message to all clients
 			SendMessages(msg)
 
-			
 		} else {
 			// if msg.Content == "exit" {
 			// 	DeleteUser(msg.ClientName)
@@ -165,7 +167,8 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 
 			// the stream is closed so we can exit the loop
 			// log the message
-			log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
+			fmt.Printf("Received message: from %s: \"%s\" At lamport timestamp: %d \n", msg.ClientName, msg.Content, vectorClock)
+			log.Printf("Received message: from %s: \"%s\" At lamport timestamp: %d", msg.ClientName, msg.Content, vectorClock)
 
 			// Counts the clients vector clock up
 			vectorClock[clientIDs[msg.ClientName]]++
@@ -205,6 +208,7 @@ func SendMessages(msg *gRPC.ChatMessage) {
 
 // Method that disconnects a client from the server
 func (s *chatServer) DisconnectFromServer(ctx context.Context, name *gRPC.ClientName) (*gRPC.Ack, error) {
+	fmt.Printf("Client %s: Disconnected from the server \n", name)
 	log.Printf("Client %s: Disconnected from the server", name)
 	DeleteUser(name.ClientName)
 	return &gRPC.Ack{Message: "success"}, nil
@@ -228,12 +232,14 @@ func GetOutboundIP() net.IP {
 func setLog() *os.File {
 	// Clears the log.txt file when a new server is started
 	if err := os.Truncate("log.txt", 0); err != nil {
+		fmt.Printf("Failed to truncate: %v \n", err)
 		log.Printf("Failed to truncate: %v", err)
 	}
 
 	// This connects to the log file/changes the output of the log informaiton to the log.txt file.
 	f, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
+		fmt.Printf("error opening file: %v", err)
 		log.Fatalf("error opening file: %v", err)
 	}
 	log.SetOutput(f)
