@@ -167,7 +167,6 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 }
 
 func SendMessages(msg *gRPC.ChatMessage) {
-	//var msg = <-newMessagesChannel
 	for name := range clientNames {
 		clientNames[name].Send(msg)
 	}

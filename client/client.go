@@ -119,15 +119,6 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 			continue
 		}
 
-		//Convert string to int64, return error if the int is larger than 32bit or not a number
-		//val, err := strconv.ParseInt(input, 10, 64)
-		// if err != nil {
-		// 	if input == "hi" {
-		// 		sayHi()
-		// 	}
-		// 	continue
-		// }
-
 		if input == "exit" {
 			chatServer.DisconnectFromServer(stream.Context(), &gRPC.ClientName{ClientName: *clientsName})
 			os.Exit(1)
