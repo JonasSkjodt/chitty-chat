@@ -55,7 +55,8 @@ func main() {
 	}
 	hasher.Write([]byte(*clientsName))
 
-	vectorClock[1]++
+	// Client will connect with a timestamp of 0 because client has not received it's id.
+	// This will be updated when the reponse from the server is received.
 	SendMessage(fmt.Sprint(hasher.Sum32()), ChatStream)
 
 	//start the biding
@@ -100,8 +101,6 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 
 	//Infinite loop to listen for clients input.
 	for {
-		fmt.Print("-> ")
-
 		//Read input into var input and any errors into err
 		input, err := reader.ReadString('\n')
 		if err != nil {
@@ -126,7 +125,7 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 		// }
 
 		if input == "exit" {
-			SendMessage("Client "+*clientsName+": Disconnected from the server", stream)
+			SendMessage("Participant "+*clientsName+" left chitty-chat", stream)
 			//chatServer.DisconnectFromServer(stream.Context(), &gRPC.ClientName{ClientName: *clientsName})
 			time.Sleep(1 * time.Second)
 			os.Exit(1)
@@ -143,6 +142,11 @@ func conReady(s gRPC.ChatClient) bool {
 
 // sets the logger to use a log.txt file instead of the console
 func setLog() *os.File {
+	if err := os.Truncate("log_"+*clientsName+".txt", 0); err != nil {
+		fmt.Printf("Failed to truncate: %v \n", err)
+		log.Printf("Failed to truncate: %v", err)
+	}
+
 	f, err := os.OpenFile("log_"+*clientsName+".txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		fmt.Printf("error opening file: %v", err)
@@ -188,7 +192,7 @@ func listenForMessages(stream gRPC.Chat_MessageStreamClient) {
 				fmt.Printf("%v \n", err)
 				log.Fatalf("%v", err)
 			}
-			if strings.Contains(msg.Content, *clientsName+" Connected") {
+			if strings.Contains(msg.Content, *clientsName+" joined chitty-chat") {
 				// Updates the clientID
 				clientID = int(msg.ClientID)
 			}
@@ -196,8 +200,8 @@ func listenForMessages(stream gRPC.Chat_MessageStreamClient) {
 			//Updates the clients vector clock
 			updateVectorClock(msg.VectorClock)
 			if msg.ClientName != *clientsName {
-				fmt.Printf("%s: \"%s\" At lamport timestamp: %d \n", msg.ClientName, msg.Content, vectorClock)
-				log.Printf("%s: \"%s\" At lamport timestamp: %d", msg.ClientName, msg.Content, vectorClock)
+				fmt.Printf("%s: \"%s\" at lamport timestamp: %d \n", msg.ClientName, msg.Content, vectorClock)
+				log.Printf("%s: \"%s\" at lamport timestamp: %d", msg.ClientName, msg.Content, vectorClock)
 			}
 
 		}
