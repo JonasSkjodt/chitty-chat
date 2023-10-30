@@ -5,11 +5,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"log"
 	"os"
-	"strconv"
 	"strings"
+	"time"
 
 	// this has to be the same as the go.mod module,
 	// followed by the path to the folder the proto file is in.
@@ -24,7 +25,6 @@ import (
 var clientsName = flag.String("name", "default", "Senders name")
 var serverPort = flag.String("server", "5400", "Tcp server")
 
-var server gRPC.TemplateClient  //the server
 var ServerConn *grpc.ClientConn //the server connection
 var chatServer gRPC.ChatClient  // new chat server client
 
@@ -41,10 +41,22 @@ func main() {
 	//connect to server and close the connection when program closes
 	fmt.Println("--- join Server ---")
 	ConnectToServer()
+	//defer SendMessage("exit", ChatStream)
 	defer ServerConn.Close()
 
+	ChatStream, err := chatServer.MessageStream(context.Background())
+	if err != nil {
+		log.Fatalf("Error on receive: %v", err)
+	}
+	hasher := fnv.New32()
+	hasher.Write([]byte(*clientsName))
+
+	SendMessage(fmt.Sprint(hasher.Sum32()), ChatStream)
+
 	//start the biding
-	parseInput()
+
+	go listenForMessages(ChatStream)
+	parseInput(ChatStream)
 }
 
 // connect to server
@@ -59,7 +71,7 @@ func ConnectToServer() {
 	}
 
 	//dial the server, with the flag "server", to get a connection to it
-	log.Printf("client %s: Attempts to dial on port %s\n", *clientsName, *serverPort)
+	log.Printf("Participant %s: Attempts to dial on port %s\n", *clientsName, *serverPort)
 	conn, err := grpc.Dial(fmt.Sprintf(":%s", *serverPort), opts...)
 	if err != nil {
 		log.Printf("Fail to Dial : %v", err)
@@ -67,17 +79,16 @@ func ConnectToServer() {
 	}
 
 	//for the chat implementation
-	chatServer = gRPC.NewChatClient(ServerConn)
 	// makes a client from the server connection and saves the connection
 	// and prints rather or not the connection was is READY
-	server = gRPC.NewTemplateClient(conn)
+	chatServer = gRPC.NewChatClient(conn)
 	ServerConn = conn
 	log.Println("the connection is: ", conn.GetState().String())
 }
 
-func parseInput() {
+func parseInput(stream gRPC.Chat_MessageStreamClient) {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("Type the amount you wish to increment with here. Type 0 to get the current value")
+	fmt.Println("Welcome to Chitty Chat!")
 	fmt.Println("--------------------")
 
 	//Infinite loop to listen for clients input.
@@ -91,71 +102,35 @@ func parseInput() {
 		}
 		input = strings.TrimSpace(input) //Trim input
 
-		if !conReady(server) {
-			log.Printf("Client %s: something was wrong with the connection to the server :(", *clientsName)
+		// check if the input is longer than 128 characters
+		if len(input) > 128 {
+			log.Println("Message is too long, please enter a message of up to 128 characters.")
 			continue
 		}
 
-		//Convert string to int64, return error if the int is larger than 32bit or not a number
-		val, err := strconv.ParseInt(input, 10, 64)
-		if err != nil {
-			if input == "hi" {
-				sayHi()
-			}
+		// when one client disconnects, broadcast the event to other clients
+		if input == "exit" {
+			chatServer.DisconnectFromServer(context.Background(), &gRPC.ClientName{ClientName: *clientsName})
+			os.Exit(1)
+		}
+
+		if !conReady(chatServer) {
+			log.Printf("Participant %s: something was wrong with the connection to the server :(", *clientsName)
 			continue
 		}
-		incrementVal(val)
-	}
-}
 
-func incrementVal(val int64) {
-	//create amount type
-	amount := &gRPC.Amount{
-		ClientName: *clientsName,
-		Value:      val, //cast from int to int32
-	}
+		if input == "exit" {
+			chatServer.DisconnectFromServer(stream.Context(), &gRPC.ClientName{ClientName: *clientsName})
+			os.Exit(1)
+		} else {
+			SendMessage(input, stream)
+		}
 
-	//Make gRPC call to server with amount, and recieve acknowlegdement back.
-	ack, err := server.Increment(context.Background(), amount)
-	if err != nil {
-		log.Printf("Client %s: no response from the server, attempting to reconnect", *clientsName)
-		log.Println(err)
 	}
-
-	// check if the server has handled the request correctly
-	if ack.NewValue >= val {
-		fmt.Printf("Success, the new value is now %d\n", ack.NewValue)
-	} else {
-		// something could be added here to handle the error
-		// but hopefully this will never be reached
-		fmt.Println("Oh no something went wrong :(")
-	}
-}
-
-func sayHi() {
-	// get a stream to the server
-	stream, err := server.SayHi(context.Background())
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	// send some messages to the server
-	stream.Send(&gRPC.Greeding{ClientName: *clientsName, Message: "Hi"})
-	stream.Send(&gRPC.Greeding{ClientName: *clientsName, Message: "How are you?"})
-	stream.Send(&gRPC.Greeding{ClientName: *clientsName, Message: "I'm fine, thanks."})
-
-	// close the stream
-	farewell, err := stream.CloseAndRecv()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	log.Println("server says: ", farewell)
 }
 
 // Function which returns a true boolean if the connection to the server is ready, and false if it's not.
-func conReady(s gRPC.TemplateClient) bool {
+func conReady(s gRPC.ChatClient) bool {
 	return ServerConn.GetState().String() == "READY"
 }
 
@@ -169,37 +144,40 @@ func setLog() *os.File {
 	return f
 }
 
-// testing messaging system start
-func sendMessage(text string) {
-	msg := &gRPC.ChatMessage{
+func SendMessage(content string, stream gRPC.Chat_MessageStreamClient) {
+
+	message := &gRPC.ChatMessage{
+		Content:    content,
 		ClientName: *clientsName,
-		Content:    text,
 	}
-	ack, err := chatServer.SendMessage(context.Background(), msg)
-	if err != nil {
-		log.Fatalf("Failed to send message: %v", err)
+
+	i := 0
+
+	if i == 0 {
+		i++
+		stream.Send(message)
+	} else {
+		stream.Send(message)
+		stream.Send(message) // Server for some reason only reads every second message sent so this is just to clear the "buffer"
 	}
-	log.Printf("Server acknowledged with: %s", ack.Status)
 }
 
-func receiveMessage() {
-	details := &gRPC.ClientName{
-		ClientName: *clientsName,
-	}
-	stream, err := chatServer.ReceiveMessageStream(context.Background(), details)
-	if err != nil {
-		log.Fatalf("Error on receive: %v", err)
-	}
+// watch the god
+func listenForMessages(stream gRPC.Chat_MessageStreamClient) {
 	for {
-		msg, err := stream.Recv()
-		if err == io.EOF {
-			break
+		time.Sleep(1 * time.Second)
+		if stream != nil {
+			msg, err := stream.Recv()
+			if err == io.EOF {
+				log.Printf("Error: io.EOF in listenForMessages in client.go")
+				break
+			}
+			if err != nil {
+				log.Fatalf("%v", err)
+			}
+			if msg.ClientName != *clientsName {
+				log.Printf("%s: %s", msg.ClientName, msg.Content)
+			}
 		}
-		if err != nil {
-			log.Fatalf("%v", err)
-		}
-		log.Printf("Received message %s from %s", msg.Content, msg.ClientName)
 	}
 }
-
-//testing messaging system end
