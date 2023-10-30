@@ -92,9 +92,6 @@ func DeleteUser(clientName string) {
 	if clientName != "" {
 		//Deletes the client from the clientNames map
 		delete(clientNames, clientName)
-
-		fmt.Printf("%s has diconnected At lamport timestamp: %d \n", clientName, vectorClock)
-		log.Printf("%s has diconnected At lamport timestamp: %d\n", clientName, vectorClock)
 	}
 }
 
@@ -129,7 +126,7 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 
 			hasher = nil
 
-		} else if strings.Contains(msg.Content, "Participant "+msg.ClientName+": left chitty-chat") {
+		} else if strings.Contains(msg.Content, "Participant "+msg.ClientName+" left chitty-chat") {
 			// Counts the clients vector clock up
 			UpdateVectorClock(msg.VectorClock)
 

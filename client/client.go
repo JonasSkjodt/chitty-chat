@@ -116,17 +116,6 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 			continue
 		}
 
-		// when one client disconnects, broadcast the event to other clients
-		if input == "exit" {
-			chatServer.DisconnectFromServer(context.Background(), &gRPC.ClientName{ClientName: *clientsName})
-			os.Exit(1)
-		}
-
-		if !conReady(chatServer) {
-			log.Printf("Participant %s: something was wrong with the connection to the server :(", *clientsName)
-			continue
-		}
-
 		if input == "exit" {
 			SendMessage("Participant "+*clientsName+" left chitty-chat", stream)
 			//chatServer.DisconnectFromServer(stream.Context(), &gRPC.ClientName{ClientName: *clientsName})
@@ -169,15 +158,7 @@ func SendMessage(content string, stream gRPC.Chat_MessageStreamClient) {
 		VectorClock: vectorClock,
 	}
 
-	i := 0
-
-	if i == 0 {
-		i++
-		stream.Send(message)
-	} else {
-		//stream.Send(message)
-		stream.Send(message) // Server for some reason only reads every second message sent so this is just to clear the "buffer"
-	}
+	stream.Send(message)
 }
 
 // watch the god
