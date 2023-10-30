@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"hash/fnv"
@@ -9,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 
 	// this has to be the same as the go.mod module,
@@ -30,7 +30,7 @@ type chatServer struct {
 // to use a flag then just add it as an argument when running the program.
 var serverName = flag.String("name", "default", "Senders name") // set with "-name <name>" in terminal
 var port = flag.String("port", "5400", "Server port")           // set with "-port <port>" in terminal
-var vectorClock = []int{0}
+var vectorClock = []int32{0}
 var clientID = 1
 var nextNumClock = 0 // vector clock for the server
 
@@ -40,8 +40,8 @@ var clientIDs = make(map[string]int)
 
 func main() {
 
-	// f := setLog() //uncomment this line to log to a log.txt file instead of the console
-	// defer f.Close()
+	f := setLog() //uncomment this line to log to a log.txt file instead of the console
+	defer f.Close()
 
 	// This parses the flags and sets the correct/given corresponding values.
 	flag.Parse()
@@ -54,11 +54,13 @@ func main() {
 }
 
 func launchServer() {
+	fmt.Printf("Server %s: Attempts to create listener on port %s\n", *serverName, *port)
 	log.Printf("Server %s: Attempts to create listener on port %s\n", *serverName, *port)
 
 	// Create listener tcp on given port or default port 5400
 	list, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", *port))
 	if err != nil {
+		fmt.Printf("Server %s: Failed to listen on port %s: %v \n", *serverName, *port, err)
 		log.Printf("Server %s: Failed to listen on port %s: %v", *serverName, *port, err) //If it fails to listen on the port, run launchServer method again with the next value/port in ports array
 		return
 	}
@@ -76,9 +78,11 @@ func launchServer() {
 
 	gRPC.RegisterChatServer(grpcServer, server) //Registers the server to the gRPC server.
 
-	log.Printf("Server %s: Listening at %v\n", *serverName, list.Addr())
+	fmt.Printf("Server %s: Listening at %v \n", *serverName, list.Addr())
+	log.Printf("Server %s: Listening at %v \n", *serverName, list.Addr())
 
 	if err := grpcServer.Serve(list); err != nil {
+		fmt.Printf("failed to serve %v", err)
 		log.Fatalf("failed to serve %v", err)
 	}
 	// code here is unreachable because grpcServer.Serve occupies the current thread.
@@ -86,28 +90,11 @@ func launchServer() {
 
 func DeleteUser(clientName string) {
 	if clientName != "" {
-		//Deletes the index of the client from the vector clock
-		// Curtiousy of https://www.geeksforgeeks.org/delete-elements-in-a-slice-in-golang/
-		vectorClock = append(vectorClock[:clientIDs[clientName]], vectorClock[clientIDs[clientName]+1:]...)
-
-		//Reduces the clientID of all clients with a higher ID than the deleted client
-		for name := range clientIDs {
-			if clientIDs[name] > clientIDs[clientName] {
-				clientIDs[name]--
-			}
-		}
-
-		//TODO Sends the vector clock to all clients with -1 on the deleted client
-
-		//Deletes the client from the clientIDs map
-		delete(clientIDs, clientName)
-
-		//Updates the clientID of the next client to connect
-		clientID = len(clientIDs) + 1
 		//Deletes the client from the clientNames map
 		delete(clientNames, clientName)
 
-		log.Printf("%s has diconnected\n", clientName)
+		fmt.Printf("%s has diconnected At lamport timestamp: %d \n", clientName, vectorClock)
+		log.Printf("%s has diconnected At lamport timestamp: %d\n", clientName, vectorClock)
 	}
 }
 
@@ -129,34 +116,46 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			clientIDs[msg.ClientName] = clientID
 			clientID++
 
-			log.Printf("Participant %s: Connected to the server", msg.ClientName)
+			//Adds the client to the vector clock
+			vectorClock = append(vectorClock, 1)
+			UpdateVectorClock(msg.VectorClock)
 
-			/*
-				algorithm for lamport timestamp should fullfill the following (if we dont use vector clock)
-				1: When a process does work, increment the counter.
-				2: When a process sends a message, include its counter.
-				3: When a process receives a message, it takes the maximum of its own counter and the received counter from the message, then increments the counter by one.
-			*/
-			nextNumClock++                      //increment the vector clcok
-			msg.Timestamp = int64(nextNumClock) //set timestamp of message
+			// Fuck you (yes you) for saying this has to be Participants instead of client
+			fmt.Printf("Participant %s joined chitty-chat at lamport timestamp: %d \n", msg.ClientName, vectorClock)
+			log.Printf("Participant %s joined chitty-chat at lamport timestamp: %d", msg.ClientName, vectorClock)
 
-			SendMessages(&gRPC.ChatMessage{ClientName: "Server", Content: fmt.Sprintf("%s Connected at Lamport Timestamp %d", msg.ClientName, msg.Timestamp)})
-
-			vectorClock = append(vectorClock, 0)
+			//Sends the message that a client has connected to the other clients
+			SendMessages(&gRPC.ChatMessage{VectorClock: vectorClock, ClientID: int32(clientIDs[msg.ClientName]), ClientName: "Server", Content: fmt.Sprintf("Participant %s joined chitty-chat", msg.ClientName)})
 
 			hasher = nil
 
+		} else if strings.Contains(msg.Content, "Participant "+msg.ClientName+": left chitty-chat") {
+			// Counts the clients vector clock up
+			UpdateVectorClock(msg.VectorClock)
+
+			fmt.Printf("Participant %s left chitty-chat at lamport timestamp: %d \n", msg.ClientName, vectorClock)
+			log.Printf("Participant %s left chitty-chat At lamport timestamp: %d", msg.ClientName, vectorClock)
+
+			//Adds the vector clock to the message
+			msg.VectorClock = vectorClock
+
+			DeleteUser(msg.ClientName)
+
+			// send the message to all clients
+			SendMessages(msg)
+
 		} else {
+			// Counts the clients vector clock up
+			UpdateVectorClock(msg.VectorClock)
 
 			// the stream is closed so we can exit the loop
 			// log the message
-			log.Printf("Received message: from %s: %s", msg.ClientName, msg.Content)
-			//lamports clock
-			if msg.Timestamp > int64(nextNumClock) {
-				nextNumClock = int(msg.Timestamp)
-			}
-			nextNumClock++
-			msg.Timestamp = int64(nextNumClock)
+			fmt.Printf("Received message: from %s: \"%s\" At lamport timestamp: %d \n", msg.ClientName, msg.Content, vectorClock)
+			log.Printf("Received message: from %s: \"%s\" At lamport timestamp: %d", msg.ClientName, msg.Content, vectorClock)
+
+			//Adds the vector clock to the message
+			msg.VectorClock = vectorClock
+
 			// send the message to all clients
 			SendMessages(msg)
 
@@ -168,25 +167,25 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 
 func SendMessages(msg *gRPC.ChatMessage) {
 	for name := range clientNames {
+		vectorClock[0]++
+		msg.VectorClock = vectorClock
 		clientNames[name].Send(msg)
 	}
 }
 
-// Method that disconnects a client from the server
-func (s *chatServer) DisconnectFromServer(ctx context.Context, name *gRPC.ClientName) (*gRPC.Ack, error) {
-	log.Printf("Participant %s: Disconnected from the server", name.ClientName)
-	DeleteUser(name.ClientName)
-
-	//increment vector clock
-	nextNumClock++
-
-	//sends a message to the rest of the clients logged into the server that a client who pressed exit left chitty chat
-	msg := &gRPC.ChatMessage{
-		ClientName: "Server",
-		Content:    fmt.Sprintf("Participant %s left Chitty-Chat at Lamport time %d", name.ClientName, nextNumClock), Timestamp: int64(nextNumClock),
+func UpdateVectorClock(msgVectorClock []int32) {
+	for i := 0; i < len(vectorClock); i++ {
+		if len(msgVectorClock) <= len(vectorClock) {
+			var lenDiff int = len(vectorClock) - len(msgVectorClock)
+			for j := 0; j < lenDiff; j++ {
+				msgVectorClock = append(msgVectorClock, 0)
+			}
+			if vectorClock[i] < msgVectorClock[i] {
+				vectorClock[i] = msgVectorClock[i]
+			}
+		}
 	}
-	SendMessages(msg) // Broadcast the "left" message
-	return &gRPC.Ack{Message: "success"}, nil
+	vectorClock[0]++
 }
 
 // Get preferred outbound ip of this machine
@@ -206,13 +205,15 @@ func GetOutboundIP() net.IP {
 // sets the logger to use a log.txt file instead of the console
 func setLog() *os.File {
 	// Clears the log.txt file when a new server is started
-	if err := os.Truncate("log.txt", 0); err != nil {
+	if err := os.Truncate("log_server.txt", 0); err != nil {
+		fmt.Printf("Failed to truncate: %v \n", err)
 		log.Printf("Failed to truncate: %v", err)
 	}
 
 	// This connects to the log file/changes the output of the log informaiton to the log.txt file.
-	f, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile("log_server.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
+		fmt.Printf("error opening file: %v", err)
 		log.Fatalf("error opening file: %v", err)
 	}
 	log.SetOutput(f)

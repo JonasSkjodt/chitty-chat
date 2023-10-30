@@ -28,6 +28,10 @@ var serverPort = flag.String("server", "5400", "Tcp server")
 var ServerConn *grpc.ClientConn //the server connection
 var chatServer gRPC.ChatClient  // new chat server client
 
+var vectorClock = []int32{0, 0} // vector clock for the client
+var clientID = -1               // clientID is set to 1 by default
+var hasher = fnv.New32()
+
 func main() {
 	//parse flag/arguments
 	flag.Parse()
@@ -35,8 +39,8 @@ func main() {
 	fmt.Println("--- CLIENT APP ---")
 
 	//log to file instead of console
-	//f := setLog()
-	//defer f.Close()
+	f := setLog()
+	defer f.Close()
 
 	//connect to server and close the connection when program closes
 	fmt.Println("--- join Server ---")
@@ -46,11 +50,13 @@ func main() {
 
 	ChatStream, err := chatServer.MessageStream(context.Background())
 	if err != nil {
+		fmt.Printf("Error on receive: %v \n", err)
 		log.Fatalf("Error on receive: %v", err)
 	}
-	hasher := fnv.New32()
 	hasher.Write([]byte(*clientsName))
 
+	// Client will connect with a timestamp of 0 because client has not received it's id.
+	// This will be updated when the reponse from the server is received.
 	SendMessage(fmt.Sprint(hasher.Sum32()), ChatStream)
 
 	//start the biding
@@ -71,9 +77,11 @@ func ConnectToServer() {
 	}
 
 	//dial the server, with the flag "server", to get a connection to it
-	log.Printf("Participant %s: Attempts to dial on port %s\n", *clientsName, *serverPort)
+	fmt.Printf("client %s: Attempts to dial on port %s\n", *clientsName, *serverPort)
+	log.Printf("client %s: Attempts to dial on port %s\n", *clientsName, *serverPort)
 	conn, err := grpc.Dial(fmt.Sprintf(":%s", *serverPort), opts...)
 	if err != nil {
+		fmt.Printf("Fail to Dial : %v \n", err)
 		log.Printf("Fail to Dial : %v", err)
 		return
 	}
@@ -83,6 +91,7 @@ func ConnectToServer() {
 	// and prints rather or not the connection was is READY
 	chatServer = gRPC.NewChatClient(conn)
 	ServerConn = conn
+	fmt.Println("the connection is: ", conn.GetState().String())
 	log.Println("the connection is: ", conn.GetState().String())
 }
 
@@ -93,18 +102,17 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 
 	//Infinite loop to listen for clients input.
 	for {
-		fmt.Print("-> ")
-
 		//Read input into var input and any errors into err
 		input, err := reader.ReadString('\n')
 		if err != nil {
+			fmt.Printf("%v \n", err)
 			log.Fatal(err)
 		}
 		input = strings.TrimSpace(input) //Trim input
 
-		// check if the input is longer than 128 characters
-		if len(input) > 128 {
-			log.Println("Message is too long, please enter a message of up to 128 characters.")
+		if !conReady(chatServer) {
+			fmt.Printf("Client %s: something was wrong with the connection to the server :(", *clientsName)
+			log.Printf("Client %s: something was wrong with the connection to the server :(", *clientsName)
 			continue
 		}
 
@@ -120,12 +128,13 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 		}
 
 		if input == "exit" {
-			chatServer.DisconnectFromServer(stream.Context(), &gRPC.ClientName{ClientName: *clientsName})
+			SendMessage("Participant "+*clientsName+" left chitty-chat", stream)
+			//chatServer.DisconnectFromServer(stream.Context(), &gRPC.ClientName{ClientName: *clientsName})
+			time.Sleep(1 * time.Second)
 			os.Exit(1)
 		} else {
 			SendMessage(input, stream)
 		}
-
 	}
 }
 
@@ -136,8 +145,14 @@ func conReady(s gRPC.ChatClient) bool {
 
 // sets the logger to use a log.txt file instead of the console
 func setLog() *os.File {
-	f, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err := os.Truncate("log_"+*clientsName+".txt", 0); err != nil {
+		fmt.Printf("Failed to truncate: %v \n", err)
+		log.Printf("Failed to truncate: %v", err)
+	}
+
+	f, err := os.OpenFile("log_"+*clientsName+".txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
+		fmt.Printf("error opening file: %v", err)
 		log.Fatalf("error opening file: %v", err)
 	}
 	log.SetOutput(f)
@@ -145,10 +160,13 @@ func setLog() *os.File {
 }
 
 func SendMessage(content string, stream gRPC.Chat_MessageStreamClient) {
-
+	if clientID != -1 {
+		vectorClock[clientID]++
+	}
 	message := &gRPC.ChatMessage{
-		Content:    content,
-		ClientName: *clientsName,
+		Content:     content,
+		ClientName:  *clientsName,
+		VectorClock: vectorClock,
 	}
 
 	i := 0
@@ -157,7 +175,7 @@ func SendMessage(content string, stream gRPC.Chat_MessageStreamClient) {
 		i++
 		stream.Send(message)
 	} else {
-		stream.Send(message)
+		//stream.Send(message)
 		stream.Send(message) // Server for some reason only reads every second message sent so this is just to clear the "buffer"
 	}
 }
@@ -169,15 +187,41 @@ func listenForMessages(stream gRPC.Chat_MessageStreamClient) {
 		if stream != nil {
 			msg, err := stream.Recv()
 			if err == io.EOF {
+				fmt.Printf("Error: io.EOF in listenForMessages in client.go \n")
 				log.Printf("Error: io.EOF in listenForMessages in client.go")
 				break
 			}
 			if err != nil {
+				fmt.Printf("%v \n", err)
 				log.Fatalf("%v", err)
 			}
+			if strings.Contains(msg.Content, *clientsName+" joined chitty-chat") {
+				// Updates the clientID
+				clientID = int(msg.ClientID)
+			}
+
+			//Updates the clients vector clock
+			updateVectorClock(msg.VectorClock)
 			if msg.ClientName != *clientsName {
-				log.Printf("%s: %s", msg.ClientName, msg.Content)
+				fmt.Printf("%s: \"%s\" at lamport timestamp: %d \n", msg.ClientName, msg.Content, vectorClock)
+				log.Printf("%s: \"%s\" at lamport timestamp: %d", msg.ClientName, msg.Content, vectorClock)
+			}
+
+		}
+	}
+}
+
+func updateVectorClock(msgVectorClock []int32) {
+	for i := 0; i < len(msgVectorClock); i++ {
+		if len(msgVectorClock) >= len(vectorClock) {
+			var lenDiff int = len(msgVectorClock) - len(vectorClock)
+			for j := 0; j < lenDiff; j++ {
+				vectorClock = append(vectorClock, 0)
+			}
+			if vectorClock[i] < msgVectorClock[i] {
+				vectorClock[i] = msgVectorClock[i]
 			}
 		}
 	}
+	vectorClock[clientID]++
 }
