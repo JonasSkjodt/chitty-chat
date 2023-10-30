@@ -137,20 +137,19 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			log.Printf("Client %s: Connected to the server At lamport timestamp: %d", msg.ClientName, vectorClock)
 
 			//Adds the client to the vector clock
-			//TODO does the server need to count its vector clock up? And does the client need to as well?
 			vectorClock = append(vectorClock, 0)
 			vectorClock[0]++
 			vectorClock[clientID-1]++
 
-			//
+			//Sends the message that a client has connected to the other clients
 			SendMessages(&gRPC.ChatMessage{VectorClock: vectorClock, ClientID: int32(clientID - 1), ClientName: "Server", Content: fmt.Sprintf("%s Connected ", msg.ClientName)})
 
 			hasher = nil
 
 		} else if strings.Contains(msg.Content, "Client "+msg.ClientName+": Disconnected from the server") {
 			// Counts the clients vector clock up
-			vectorClock[clientIDs[msg.ClientName]]++
 			vectorClock[0]++
+			UpdateVectorClock(msg.VectorClock)
 
 			//Adds the vector clock to the message
 			msg.VectorClock = vectorClock
@@ -171,8 +170,8 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			log.Printf("Received message: from %s: \"%s\" At lamport timestamp: %d", msg.ClientName, msg.Content, vectorClock)
 
 			// Counts the clients vector clock up
-			vectorClock[clientIDs[msg.ClientName]]++
 			vectorClock[0]++
+			UpdateVectorClock(msg.VectorClock)
 
 			//Adds the vector clock to the message
 			msg.VectorClock = vectorClock
@@ -205,6 +204,14 @@ func SendMessages(msg *gRPC.ChatMessage) {
 // 	clientNames[msg.ClientName] = msgStream
 // 	return nil
 // }
+
+func UpdateVectorClock(msgVectorClock []int32) {
+	for i := 0; i < len(vectorClock); i++ {
+		if vectorClock[i] < msgVectorClock[i] {
+			vectorClock[i] = msgVectorClock[i]
+		}
+	}
+}
 
 // Method that disconnects a client from the server
 func (s *chatServer) DisconnectFromServer(ctx context.Context, name *gRPC.ClientName) (*gRPC.Ack, error) {
