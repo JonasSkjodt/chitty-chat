@@ -97,6 +97,7 @@ func ConnectToServer() {
 
 func parseInput(stream gRPC.Chat_MessageStreamClient) {
 	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("Welcome to Chitty Chat!")
 	fmt.Println("--------------------")
 
 	//Infinite loop to listen for clients input.
@@ -115,14 +116,16 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 			continue
 		}
 
-		//Convert string to int64, return error if the int is larger than 32bit or not a number
-		//val, err := strconv.ParseInt(input, 10, 64)
-		// if err != nil {
-		// 	if input == "hi" {
-		// 		sayHi()
-		// 	}
-		// 	continue
-		// }
+		// when one client disconnects, broadcast the event to other clients
+		if input == "exit" {
+			chatServer.DisconnectFromServer(context.Background(), &gRPC.ClientName{ClientName: *clientsName})
+			os.Exit(1)
+		}
+
+		if !conReady(chatServer) {
+			log.Printf("Participant %s: something was wrong with the connection to the server :(", *clientsName)
+			continue
+		}
 
 		if input == "exit" {
 			SendMessage("Participant "+*clientsName+" left chitty-chat", stream)

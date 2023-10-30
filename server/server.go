@@ -33,8 +33,6 @@ var port = flag.String("port", "5400", "Server port")           // set with "-po
 var vectorClock = []int32{0}
 var clientID = 1
 var nextNumClock = 0 // vector clock for the server
-var chatHistory []*gRPC.ChatMessage
-var newMessagesChannel = make(chan *gRPC.ChatMessage)
 
 // Maps
 var clientNames = make(map[string]gRPC.Chat_MessageStreamServer)
@@ -168,7 +166,6 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 }
 
 func SendMessages(msg *gRPC.ChatMessage) {
-	//var msg = <-newMessagesChannel
 	for name := range clientNames {
 		vectorClock[0]++
 		msg.VectorClock = vectorClock
