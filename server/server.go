@@ -117,7 +117,6 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 			vectorClock = append(vectorClock, 1)
 			UpdateVectorClock(msg.VectorClock)
 
-			// Fuck you (yes you) for saying this has to be Participants instead of client
 			fmt.Printf("Participant %s joined chitty-chat at lamport timestamp: %d \n", msg.ClientName, vectorClock)
 			log.Printf("Participant %s joined chitty-chat at lamport timestamp: %d", msg.ClientName, vectorClock)
 
@@ -172,14 +171,16 @@ func SendMessages(msg *gRPC.ChatMessage) {
 
 func UpdateVectorClock(msgVectorClock []int32) {
 	for i := 0; i < len(vectorClock); i++ {
+		// Add dummy values to msgVectorClock so that values can be compared 
 		if len(msgVectorClock) <= len(vectorClock) {
 			var lenDiff int = len(vectorClock) - len(msgVectorClock)
 			for j := 0; j < lenDiff; j++ {
 				msgVectorClock = append(msgVectorClock, 0)
 			}
-			if vectorClock[i] < msgVectorClock[i] {
-				vectorClock[i] = msgVectorClock[i]
-			}
+		}
+		// Compare and update vectorclock values
+		if vectorClock[i] < msgVectorClock[i] {
+			vectorClock[i] = msgVectorClock[i]
 		}
 	}
 	vectorClock[0]++
