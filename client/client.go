@@ -14,7 +14,7 @@ import (
 
 	// this has to be the same as the go.mod module,
 	// followed by the path to the folder the proto file is in.
-
+	// referred from https://github.com/PatrickMatthiesen/DSYS-gRPC-template
 	gRPC "github.com/JonasSkjodt/chitty-chat/proto"
 
 	"google.golang.org/grpc"
