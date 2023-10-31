@@ -110,6 +110,12 @@ func parseInput(stream gRPC.Chat_MessageStreamClient) {
 		}
 		input = strings.TrimSpace(input) //Trim input
 
+		// message must be under 128 characters long
+		if len(input) > 128 {
+			println("Message is too long. Your message must be under 128 characters long")
+			continue
+		}
+
 		if !conReady(chatServer) {
 			fmt.Printf("Client %s: something was wrong with the connection to the server :(", *clientsName)
 			log.Printf("Client %s: something was wrong with the connection to the server :(", *clientsName)
