@@ -194,14 +194,16 @@ func listenForMessages(stream gRPC.Chat_MessageStreamClient) {
 
 func updateVectorClock(msgVectorClock []int32) {
 	for i := 0; i < len(msgVectorClock); i++ {
+		// Add values to vectorClock if different lengths
 		if len(msgVectorClock) >= len(vectorClock) {
 			var lenDiff int = len(msgVectorClock) - len(vectorClock)
 			for j := 0; j < lenDiff; j++ {
 				vectorClock = append(vectorClock, 0)
 			}
-			if vectorClock[i] < msgVectorClock[i] {
-				vectorClock[i] = msgVectorClock[i]
-			}
+		}
+		// Compare and update values
+		if vectorClock[i] < msgVectorClock[i] {
+			vectorClock[i] = msgVectorClock[i]
 		}
 	}
 	vectorClock[clientID]++
