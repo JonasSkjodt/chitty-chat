@@ -163,15 +163,17 @@ func (s *chatServer) MessageStream(msgStream gRPC.Chat_MessageStreamServer) erro
 
 func SendMessages(msg *gRPC.ChatMessage) {
 	for name := range clientNames {
-		vectorClock[0]++
-		msg.VectorClock = vectorClock
-		clientNames[name].Send(msg)
+		if msg.ClientName != name {
+			vectorClock[0]++
+			msg.VectorClock = vectorClock
+			clientNames[name].Send(msg)
+		}
 	}
 }
 
 func UpdateVectorClock(msgVectorClock []int32) {
 	for i := 0; i < len(vectorClock); i++ {
-		// Add dummy values to msgVectorClock so that values can be compared 
+		// Add dummy values to msgVectorClock so that values can be compared
 		if len(msgVectorClock) <= len(vectorClock) {
 			var lenDiff int = len(vectorClock) - len(msgVectorClock)
 			for j := 0; j < lenDiff; j++ {
